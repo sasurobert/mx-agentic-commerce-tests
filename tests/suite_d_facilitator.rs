@@ -2,7 +2,7 @@ use mx_agentic_commerce_tests::ProcessManager;
 use multiversx_sc_snippets::imports::*;
 use tokio::time::{sleep, Duration};
 use reqwest;
-use rand::Rng;
+use rand::RngCore;
 use bech32::{self, Hrp, Bech32};
 
 mod common;
@@ -11,7 +11,7 @@ use common::{IdentityRegistryInteractor, GATEWAY_URL};
 const FACILITATOR_PORT: u16 = 3000;
 
 fn generate_random_private_key() -> String {
-    let mut rng = rand::rng();
+    let mut rng = rand::thread_rng();
     let mut key = [0u8; 32];
     rng.fill_bytes(&mut key);
     hex::encode(key)
@@ -52,7 +52,7 @@ async fn test_facilitator_flow() {
     println!("Facilitator Address: {}", address_to_bech32(&wallet_facilitator_address));
 
     // 3. Deploy Identity Registry
-    let mut identity = IdentityRegistryInteractor::init(&mut interactor, wallet_alice.clone()).await;
+    let identity = IdentityRegistryInteractor::init(&mut interactor, wallet_alice.clone()).await;
     
     let registry_address = address_to_bech32(identity.address());
     println!("Registry Address: {}", registry_address);

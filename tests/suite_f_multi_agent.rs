@@ -3,6 +3,8 @@ use multiversx_sc_snippets::imports::*;
 use tokio::time::{sleep, Duration};
 use std::process::Stdio;
 use serde_json::{json, Value};
+use std::path::Path;
+use std::fs;
 
 mod common;
 use common::{GATEWAY_URL, IdentityRegistryInteractor, generate_random_private_key, create_pem_file, address_to_bech32};
@@ -24,29 +26,60 @@ async fn test_multi_agent_payment_delegation() {
     let mut interactor = Interactor::new(SIM_URL).await
         .use_chain_simulator(true);
 
-    // Admin (Genesis)
-    let admin = interactor.register_wallet(test_wallets::alice()).await;
+    // 2. Create Wallets
+    let admin = interactor.register_wallet(test_wallets::alice()).await; // Admin (Genesis Alice)
     
-    // Create Alice (Buyer) - Manually so we have PK
+    // Create Admin PEM for mxpy
+    let admin_pem_path = Path::new("tests/temp_multi_agent/admin.pem");
+    // Alice Genesis Private Key (standard devnet)
+    let admin_priv_key = "413f42575f7f26fad3317a778771212fdb80245850181cb4c9ce61db51c4b8e7";
+    common::create_pem_file(admin_pem_path.to_str().unwrap(), admin_priv_key, "erd1qyu5wthldzr8wx5c9ucg8kjagg0jfs53s8nr3zpz3hypefsdd8ssycr6th");
+    let admin_pem_abs = fs::canonicalize(admin_pem_path).expect("Failed to canonicalize admin pem");
+
     let alice_pk = generate_random_private_key();
     let alice_wallet = Wallet::from_private_key(&alice_pk).unwrap();
-    let alice_addr_obj = alice_wallet.to_address();
-    let alice_addr = address_to_bech32(&alice_addr_obj);
-    let alice_sc_addr = Address::from_slice(alice_addr_obj.as_bytes());
-    println!("Alice (Buyer): {}", alice_addr);
+    let alice_addr = address_to_bech32(&alice_wallet.to_address());
+    let alice_sc_addr = Address::from_slice(alice_wallet.to_address().as_bytes());
+    
+    // Save Alice PEM
+    let alice_pem = Path::new("tests/temp_multi_agent/alice.pem");
+    common::create_pem_file(alice_pem.to_str().unwrap(), &alice_pk, &alice_addr);
+    let alice_pem_abs = fs::canonicalize(alice_pem).expect("Failed to canonicalize alice pem");
 
-    // Create Bob (Seller)
     let bob_pk = generate_random_private_key();
     let bob_wallet = Wallet::from_private_key(&bob_pk).unwrap();
     let bob_addr = address_to_bech32(&bob_wallet.to_address());
     let bob_sc_addr = Address::from_slice(bob_wallet.to_address().as_bytes());
+
+    println!("Alice (Buyer): {}", alice_addr);
     println!("Bob (Seller): {}", bob_addr);
 
-    // Fund Alice & Bob
-    interactor.tx().from(&admin).to(&alice_sc_addr).egld(5_000_000_000_000_000_000u64).run().await; // 5 EGLD
+    // Fund Alice & Bob using mxpy on Chain D
+    // Bob can be funded via interactor on "chain" (he doesn't sign txs in this flow, he just receives)
     interactor.tx().from(&admin).to(&bob_sc_addr).egld(1_000_000_000_000_000_000u64).run().await;   // 1 EGLD
     
+    // Fund Alice on Chain D via fund.ts
+    println!("Funding Alice on Chain D...");
+    let status = std::process::Command::new("npx")
+        .arg("ts-node")
+        .arg("scripts/fund.ts")
+        .arg(admin_pem_abs.to_str().unwrap())
+        .arg(&alice_addr)
+        .arg("5000000000000000000") // 5 EGLD
+        .arg("D") // ChainID
+        .arg(SIM_URL)
+        .current_dir("../moltbot-starter-kit")
+        .stdout(Stdio::piped())
+        .stderr(Stdio::inherit())
+        .output()
+        .expect("Failed to run fund.ts");
+        
+    if !status.status.success() {
+         panic!("Funding Alice via fund.ts failed");
+    }
+    
     // Wait for funding
+    let mut funding_attempts = 0;
     loop {
         let acc = interactor.get_account(&alice_sc_addr).await;
         if acc.balance.parse::<u64>().unwrap_or(0) > 0 {
@@ -79,7 +112,9 @@ async fn test_multi_agent_payment_delegation() {
         ("MULTIVERSX_API_URL", SIM_URL),
         ("MNEMONIC", "moral volcano peasant pass circle pen over picture flat shop clap goat"), // Dummy
         ("STORE_PATH", "tests/temp_multi_agent/facilitator.db"),
-        ("STORAGE_TYPE", "json")
+        ("STORAGE_TYPE", "json"),
+        ("CHAIN_ID", "D"),
+        ("SKIP_SIMULATION", "true")
     ];
     
     pm.start_node_service(
@@ -117,13 +152,13 @@ async fn test_multi_agent_payment_delegation() {
     let status = std::process::Command::new("npx")
         .arg("ts-node")
         .arg("scripts/sign_x402.ts")
-        .arg(alice_pem.to_str().unwrap())
+        .arg(alice_pem_abs.to_str().unwrap())
         .arg(&bob_addr)
         .arg(payment_value)
         .arg(nonce.to_string())
+        .arg("D") // ChainID enforced to D
         // .arg(&chain_id) // ChainID
-        .arg(&chain_id) // ChainID
-        // .arg("D") // ChainID, Force D to test
+        // .arg("local-testnet") // ChainID, Force local-testnet
         .arg("init_job@1234") // Data
         .current_dir("../moltbot-starter-kit")
         .stdout(Stdio::piped())
