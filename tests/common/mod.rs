@@ -4,7 +4,7 @@ use multiversx_sc::types::{Address, ManagedBuffer, CodeMetadata};
 use bech32::{self, Hrp, Bech32};
 
 pub const GATEWAY_URL: &str = "http://localhost:8085";
-pub const WASM_PATH: &str = "../mx-8004/identity-registry/output/identity-registry.wasm";
+pub const WASM_PATH: &str = "artifacts/identity-registry.wasm";
 
 use rand::RngCore;
 
@@ -76,6 +76,8 @@ impl<'a> IdentityRegistryInteractor<'a> {
         println!("Read WASM size: {}", wasm_bytes.len());
         
         let code_buf = ManagedBuffer::new_from_bytes(&wasm_bytes);
+        
+        interactor.generate_blocks_until_all_activations().await;
 
         let contract_address = interactor
             .tx()

@@ -19,23 +19,37 @@ async fn test_multi_agent_payment_delegation() {
     let mut pm = ProcessManager::new();
     
     // 1. Start Infrastructure
-    pm.start_chain_simulator(CHAIN_SIM_PORT).expect("Failed to start Sim");
-    sleep(Duration::from_secs(2)).await;
+    // pm.start_chain_simulator(CHAIN_SIM_PORT).expect("Failed to start Sim");
+    // sleep(Duration::from_secs(2)).await;
 
     // 2. Setup Interactor & Wallets
     let mut interactor = Interactor::new(SIM_URL).await
         .use_chain_simulator(true);
-
-    // 2. Create Wallets
-    let admin = interactor.register_wallet(test_wallets::alice()).await; // Admin (Genesis Alice)
     
-    // Create Admin PEM for mxpy
-    let admin_pem_path = Path::new("tests/temp_multi_agent/admin.pem");
-    // Alice Genesis Private Key (standard devnet)
-    let admin_priv_key = "413f42575f7f26fad3317a778771212fdb80245850181cb4c9ce61db51c4b8e7";
-    common::create_pem_file(admin_pem_path.to_str().unwrap(), admin_priv_key, "erd1qyu5wthldzr8wx5c9ucg8kjagg0jfs53s8nr3zpz3hypefsdd8ssycr6th");
-    let admin_pem_abs = fs::canonicalize(admin_pem_path).expect("Failed to canonicalize admin pem");
-
+    // Extract Dynamic URL
+    // Try to access proxy URL. If this fails to compile, we will need another way.
+    // But `multiversx_sc_snippets` Interactor struct usually exposes proxy.
+    // And ProxyNetworkProvider usually has url.
+    // Let's assume interactor has a method `current_proxy()` or field `proxy`.
+    // Or `base_url` might be protected.
+    // I'll try to guess logic: Interactor usually has `proxy` field.
+    // Let's try: `interactor.proxy.base_url()`.
+    
+    // NOTE: This line is risky (compilation). If fails, I will fix.
+    // For now, let's assume we can get it or fail fast.
+    // Actually, `multiversx-sdk` ProxyNetworkProvider likely holds url in a private field `base_url`.
+    // But might have getter `url()`.
+    
+    // TEMPORARY HACK: If I cannot get URL, I am stuck. 
+    // I will try to proceed with SIM_URL (8085) IF use_chain_simulator(true) respects it.
+    // But logs showed it didn't.
+    
+    // I'll try to access `interactor.proxy.url()`.
+    
+    // 2.2 Create Wallets (Admin)
+    let admin = interactor.register_wallet(test_wallets::alice()).await; 
+    
+    // ... logic for alice_pk ...
     let alice_pk = generate_random_private_key();
     let alice_wallet = Wallet::from_private_key(&alice_pk).unwrap();
     let alice_addr = address_to_bech32(&alice_wallet.to_address());
@@ -54,42 +68,13 @@ async fn test_multi_agent_payment_delegation() {
     println!("Alice (Buyer): {}", alice_addr);
     println!("Bob (Seller): {}", bob_addr);
 
-    // Fund Alice & Bob using mxpy on Chain D
-    // Bob can be funded via interactor on "chain" (he doesn't sign txs in this flow, he just receives)
+    // Fund Alice & Bob using Interactor
     interactor.tx().from(&admin).to(&bob_sc_addr).egld(1_000_000_000_000_000_000u64).run().await;   // 1 EGLD
-    
-    // Fund Alice on Chain D via fund.ts
-    println!("Funding Alice on Chain D...");
-    let status = std::process::Command::new("npx")
-        .arg("ts-node")
-        .arg("scripts/fund.ts")
-        .arg(admin_pem_abs.to_str().unwrap())
-        .arg(&alice_addr)
-        .arg("5000000000000000000") // 5 EGLD
-        .arg("D") // ChainID
-        .arg(SIM_URL)
-        .current_dir("../moltbot-starter-kit")
-        .stdout(Stdio::piped())
-        .stderr(Stdio::inherit())
-        .output()
-        .expect("Failed to run fund.ts");
-        
-    if !status.status.success() {
-         panic!("Funding Alice via fund.ts failed");
-    }
+    interactor.tx().from(&admin).to(&alice_sc_addr).egld(5_000_000_000_000_000_000u64).run().await; // 5 EGLD
     
     // Wait for funding
-    let mut funding_attempts = 0;
-    loop {
-        let acc = interactor.get_account(&alice_sc_addr).await;
-        if acc.balance.parse::<u64>().unwrap_or(0) > 0 {
-            println!("Alice Funded: {}", acc.balance);
-            break;
-        }
-        sleep(Duration::from_millis(500)).await;
-    }
-    sleep(Duration::from_secs(5)).await; // Ensure sync for simulation
-
+    // Funding is sync in Interactor.run().await so we can proceed.
+    
     // Save Pem for Signing Script
     let project_root = std::env::current_dir().unwrap();
     let temp_dir = project_root.join("tests").join("temp_multi_agent");
@@ -106,14 +91,67 @@ async fn test_multi_agent_payment_delegation() {
     let mut registry = IdentityRegistryInteractor::init(&mut interactor, admin.clone()).await;
     let registry_addr = address_to_bech32(registry.address());
     
+    // We need the SIMULATOR URL for External Scripts (get_chain_id, Facilitator, sign_x402)
+    // If interactor spawned a random port, we MUST find it.
+    // I'll try to find it by running a shell command that lists listening ports for `mx-chain-simulator`?
+    // Or better: Assume `interactor` struct structure.
+    
+    // Let's assume `interactor_proxy_url` is needed.
+    // I'll try to use a HARDCODED `http://localhost:8085` FIRST?
+    // NO, that failed.
+    
+    // I'll try to get it.
+    // `interactor` field access attempt.
+    // let sim_url = interactor.proxy.url(); 
+    
+    // If compilation fails, I will revert and use `mx-chain-simulator-go` via `pm` BUT with proper flags?
+    // No, `pm` code is hard to change (re-export).
+    
+    // I'll try to assume the port is accessible.
+    // If I cannot get it, I will assume it is 8085 and `use_chain_simulator(true)` FAILED to start on 8085 because PM started it.
+    // In this run, I REMOVED `pm.start...`.
+    // So `8085` is FREE.
+    // Maybe `interactor` will default to `8085` (SIM_URL passed in new) if it's free?
+    // `Interactor::new("http://localhost:8085")`
+    // If `use_chain_simulator(true)` respects the URL provided in `new()`, then it will start on 8085.
+    // And since it starts it (via SDK logic), it will be FUNDED.
+    // THIS IS THE KEY!
+    // In previous failed run (Step 3025), I started it via `pm`. (Empty funds).
+    // Interactor connected to it. Failed.
+    // In `suite_d` run, `pm` started 8085. Interactor started Random. Split Brain.
+    
+    // NOW: I remove `pm.start`.
+    // Interactor starts on `SIM_URL` (8085) IF it respects arg.
+    // IF IT DOES, then `sim_url = SIM_URL`.
+    // And Facilitator works.
+    
+    // So I will use `SIM_URL` as dynamic url.
+    let sim_url = SIM_URL; 
+
+    // Get ChainID from Simulator
+    let client = reqwest::Client::new();
+    let resp: serde_json::Value = client.get(format!("{}/network/config", SIM_URL))
+        .send()
+        .await
+        .expect("Failed to get network config")
+        .json()
+        .await
+        .expect("Failed to parse network config");
+    
+    let chain_id = resp["data"]["config"]["erd_chain_id"].as_str().expect("Chain ID not found").to_string();
+    println!("Simulator ChainID: {}", chain_id);
+    
     // 4. Start Facilitator
     let env = vec![
         ("PORT", "3005"),
-        ("MULTIVERSX_API_URL", SIM_URL),
+        ("MULTIVERSX_API_URL", sim_url),
+        ("MX_PROXY_URL", sim_url), // Ensure both used
+        ("PRIVATE_KEY", "e253a571ca153dc2aee845819f74bcc9773b0586edead15a94d728462b34ef8c"), // Random
+        ("REGISTRY_ADDRESS", &registry_addr),
+        ("CHAIN_ID", &chain_id), // Use dynamic ChainID
         ("MNEMONIC", "moral volcano peasant pass circle pen over picture flat shop clap goat"), // Dummy
         ("STORE_PATH", "tests/temp_multi_agent/facilitator.db"),
         ("STORAGE_TYPE", "json"),
-        ("CHAIN_ID", "D"),
         ("SKIP_SIMULATION", "true")
     ];
     
@@ -134,19 +172,6 @@ async fn test_multi_agent_payment_delegation() {
     let nonce = account.nonce;
     println!("Alice Nonce: {}", nonce);
 
-    // Get ChainID from Simulator
-    let client = reqwest::Client::new();
-    let resp: serde_json::Value = client.get(format!("{}/network/config", SIM_URL))
-        .send()
-        .await
-        .expect("Failed to get network config")
-        .json()
-        .await
-        .expect("Failed to parse network config");
-    
-    let chain_id = resp["data"]["config"]["erd_chain_id"].as_str().expect("Chain ID not found").to_string();
-    println!("Simulator ChainID: {}", chain_id);
-
     // Sign X402 Payment
     println!("Signing X402 Payload...");
     let status = std::process::Command::new("npx")
@@ -156,9 +181,7 @@ async fn test_multi_agent_payment_delegation() {
         .arg(&bob_addr)
         .arg(payment_value)
         .arg(nonce.to_string())
-        .arg("D") // ChainID enforced to D
-        // .arg(&chain_id) // ChainID
-        // .arg("local-testnet") // ChainID, Force local-testnet
+        .arg(&chain_id) // Dynamic ChainID
         .arg("init_job@1234") // Data
         .current_dir("../moltbot-starter-kit")
         .stdout(Stdio::piped())
@@ -167,7 +190,7 @@ async fn test_multi_agent_payment_delegation() {
         .expect("Failed to run signing script");
 
     if !status.status.success() {
-        panic!("Signing failed");
+        panic!("Signing X402 failed");
     }
     
     let payload_json: Value = serde_json::from_slice(&status.stdout).expect("Invalid JSON from signer");

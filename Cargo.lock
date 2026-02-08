@@ -959,6 +959,26 @@ dependencies = [
 ]
 
 [[package]]
+name = "identity-registry"
+version = "0.1.0"
+dependencies = [
+ "multiversx-sc",
+ "multiversx-sc-modules",
+]
+
+[[package]]
+name = "identity-registry-interactor"
+version = "0.0.0"
+dependencies = [
+ "clap",
+ "identity-registry",
+ "multiversx-sc",
+ "multiversx-sc-snippets",
+ "serde",
+ "toml",
+]
+
+[[package]]
 name = "idna"
 version = "1.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1288,6 +1308,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "multiversx-sc-modules"
+version = "0.64.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ff7435a35c414d87d593ed3efc3ae62dad0fbc0d3c9c657d2c6ab077c11250b3"
+dependencies = [
+ "multiversx-sc",
+]
+
+[[package]]
 name = "multiversx-sc-scenario"
 version = "0.64.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1385,6 +1414,7 @@ dependencies = [
  "base64 0.21.7",
  "bech32",
  "hex",
+ "identity-registry-interactor",
  "multiversx-sc",
  "multiversx-sc-codec",
  "multiversx-sc-derive",
