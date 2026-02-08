@@ -32,13 +32,16 @@ async fn test_mcp_features() {
     pm.start_chain_simulator(8085).expect("Failed to start Sim");
     sleep(Duration::from_secs(2)).await;
 
+    let chain_id = common::get_simulator_chain_id().await;
+    println!("Simulator ChainID: {}", chain_id);
+
     println!("Starting MCP Server...");
     let mut child = Command::new("node")
         .arg("dist/index.js")
         .arg("mcp")
         .current_dir("../multiversx-mcp-server")
         .env("MULTIVERSX_API_URL", GATEWAY_URL)
-        .env("MULTIVERSX_CHAIN_ID", "local-testnet")
+        .env("MULTIVERSX_CHAIN_ID", &chain_id)
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::inherit())

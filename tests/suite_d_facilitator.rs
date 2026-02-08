@@ -58,12 +58,15 @@ async fn test_facilitator_flow() {
     println!("Registry Address: {}", registry_address);
 
     // 4. Start Facilitator
+    let chain_id = common::get_simulator_chain_id().await;
+    println!("Simulator ChainID: {}", chain_id);
+
     let env_vars = vec![
         ("PORT", "3000"),
         ("PRIVATE_KEY", facilitator_pk.as_str()),
         ("REGISTRY_ADDRESS", registry_address.as_str()),
         ("GATEWAY_URL", GATEWAY_URL),
-        ("CHAIN_ID", "local-testnet"), // Simulator chain ID
+        ("CHAIN_ID", chain_id.as_str()), // Simulator chain ID
     ];
     
     // Path relative to mx-agentic-commerce-tests root

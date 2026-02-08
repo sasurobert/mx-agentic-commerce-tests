@@ -6,6 +6,20 @@ use bech32::{self, Hrp, Bech32};
 pub const GATEWAY_URL: &str = "http://localhost:8085";
 pub const WASM_PATH: &str = "artifacts/identity-registry.wasm";
 
+pub async fn get_simulator_chain_id() -> String {
+    let client = reqwest::Client::new();
+    let resp: serde_json::Value = client.get(format!("{}/network/config", GATEWAY_URL))
+        .send()
+        .await
+        .expect("Failed to get network config")
+        .json()
+        .await
+        .expect("Failed to parse network config");
+    
+    resp["data"]["config"]["erd_chain_id"].as_str().expect("Chain ID not found").to_string()
+}
+
+
 use rand::RngCore;
 
 pub fn generate_random_private_key() -> String {

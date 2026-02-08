@@ -129,16 +129,7 @@ async fn test_multi_agent_payment_delegation() {
     let sim_url = SIM_URL; 
 
     // Get ChainID from Simulator
-    let client = reqwest::Client::new();
-    let resp: serde_json::Value = client.get(format!("{}/network/config", SIM_URL))
-        .send()
-        .await
-        .expect("Failed to get network config")
-        .json()
-        .await
-        .expect("Failed to parse network config");
-    
-    let chain_id = resp["data"]["config"]["erd_chain_id"].as_str().expect("Chain ID not found").to_string();
+    let chain_id = common::get_simulator_chain_id().await;
     println!("Simulator ChainID: {}", chain_id);
     
     // 4. Start Facilitator
