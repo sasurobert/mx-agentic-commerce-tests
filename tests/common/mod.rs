@@ -146,7 +146,12 @@ impl<'a> IdentityRegistryInteractor<'a> {
             .gas(600_000_000)
             .raw_deploy()
             .code(code_buf)
-            .code_metadata(CodeMetadata::PAYABLE_BY_SC)
+            .code_metadata(
+                CodeMetadata::UPGRADEABLE
+                    | CodeMetadata::READABLE
+                    | CodeMetadata::PAYABLE
+                    | CodeMetadata::PAYABLE_BY_SC,
+            )
             .returns(ReturnsNewAddress)
             .run()
             .await;
@@ -175,6 +180,9 @@ impl<'a> IdentityRegistryInteractor<'a> {
             .argument(&ticker_buf)
             .run()
             .await;
+
+        // Wait for async issuance callback (required for NFT token registration)
+        let _ = self.interactor.generate_blocks(3).await;
 
         println!("Issued Token: {}", ticker);
     }

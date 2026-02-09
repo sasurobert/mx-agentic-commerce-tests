@@ -122,14 +122,19 @@ async fn test_mcp_tool_coverage() {
 
     let chain_id = common::get_simulator_chain_id().await;
 
+    // Use existing alice.pem from the test project root
+    let pem_path = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("alice.pem");
+    assert!(pem_path.exists(), "alice.pem not found at {:?}", pem_path);
+
     // ── 2. Start MCP Server ──
     println!("Starting MCP Server...");
     let mut child = Command::new("node")
         .arg("dist/index.js")
         .arg("mcp")
         .current_dir("../multiversx-mcp-server")
-        .env("MULTIVERSX_API_URL", GATEWAY_URL)
-        .env("MULTIVERSX_CHAIN_ID", &chain_id)
+        .env("MVX_API_URL", GATEWAY_URL)
+        .env("MVX_NETWORK", "devnet")
+        .env("MVX_WALLET_PEM", pem_path.to_str().unwrap())
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::inherit())
