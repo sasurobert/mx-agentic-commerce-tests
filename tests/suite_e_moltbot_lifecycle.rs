@@ -1,118 +1,167 @@
-use mx_agentic_commerce_tests::ProcessManager;
+use base64::Engine as _;
 use multiversx_sc_snippets::imports::*;
+use mx_agentic_commerce_tests::ProcessManager;
+use serde_json::{json, Value};
+use std::process::Stdio;
 use tokio::time::{sleep, Duration};
-use std::fs;
 
 mod common;
-use common::{IdentityRegistryInteractor, GATEWAY_URL, generate_random_private_key, address_to_bech32, create_pem_file};
+use common::{
+    address_to_bech32, create_pem_file, generate_blocks_on_simulator, generate_random_private_key,
+    IdentityRegistryInteractor, GATEWAY_URL,
+};
 
-const FACILITATOR_PORT: u16 = 3000;
-
+/// Suite E: Moltbot direct registration (funded wallet, no relayer).
+///
+/// Tests:
+///   1. Deploy identity registry + issue token
+///   2. Fund moltbot wallet
+///   3. Run `npm run register` with a funded wallet (direct broadcast path)
+///   4. Verify on-chain that the agent is registered via `get_agent_id` vmQuery
 #[tokio::test]
 async fn test_moltbot_lifecycle() {
     let mut pm = ProcessManager::new();
-    
+
     // 1. Start Chain Simulator
-    pm.start_chain_simulator(8085).expect("Failed to start simulator");
+    pm.start_chain_simulator(8085)
+        .expect("Failed to start simulator");
     sleep(Duration::from_secs(2)).await;
 
-    // 2. Setup Interactor & Users
-    let mut interactor = Interactor::new(GATEWAY_URL).await
-        .use_chain_simulator(true);
-    let wallet_alice = interactor.register_wallet(test_wallets::alice()).await;
-    
-    // 3. Deploy Identity Registry
-    let identity = IdentityRegistryInteractor::init(&mut interactor, wallet_alice.clone()).await;
-    let registry_address = address_to_bech32(identity.address());
+    // 2. Setup Interactor & Admin
+    let mut interactor = Interactor::new(GATEWAY_URL).await.use_chain_simulator(true);
+    let alice = interactor.register_wallet(test_wallets::alice()).await;
+
+    let chain_id = common::get_simulator_chain_id().await;
+    println!("Simulator ChainID: {}", chain_id);
+
+    // 3. Deploy Identity Registry + Issue Token
+    let mut registry = IdentityRegistryInteractor::init(&mut interactor, alice.clone()).await;
+    let registry_address = address_to_bech32(registry.address());
     println!("Registry Address: {}", registry_address);
 
-    // 4. Start Facilitator (Prerequisite for Moltbot, though registration might not need it, 
-    //    but Moltbot usually checks connection)
-    //    We'll start it to be safe and consistent with full env.
-    
-    let facilitator_pk = generate_random_private_key();
-    let wallet_facilitator = interactor.register_wallet(
-        Wallet::from_private_key(&facilitator_pk).expect("Failed to create wallet")
-    ).await;
-    
-    // Fund Facilitator
-    interactor.tx().from(&wallet_alice).to(&wallet_facilitator).egld(1_000_000_000_000_000_000u64).run().await;
-    let _facilitator_address_bech32 = address_to_bech32(&wallet_facilitator);
+    registry.issue_token("Agent", "AGENT").await;
+    generate_blocks_on_simulator(20).await;
+    sleep(Duration::from_millis(500)).await;
 
-    let env_vars = vec![
-        ("PORT", "3000"),
-        ("PRIVATE_KEY", facilitator_pk.as_str()),
-        ("REGISTRY_ADDRESS", registry_address.as_str()),
-        ("GATEWAY_URL", GATEWAY_URL),
-        ("CHAIN_ID", "local-testnet"),
-    ];
-    
-    pm.start_node_service(
-        "Facilitator", 
-        "../x402_integration/x402_facilitator", 
-        "dist/index.js", 
-        env_vars, 
-        FACILITATOR_PORT
-    ).expect("Failed to start Facilitator");
-    sleep(Duration::from_secs(2)).await;
-
-    // 5. Setup Moltbot Wallet
+    // 4. Setup Moltbot Wallet (FUNDED — direct TX path)
     let moltbot_pk = generate_random_private_key();
     let moltbot_wallet_obj = Wallet::from_private_key(&moltbot_pk).unwrap();
-    let moltbot_address = interactor.register_wallet(moltbot_wallet_obj).await;
+    let moltbot_address = interactor.register_wallet(moltbot_wallet_obj.clone()).await;
     let moltbot_address_bech32 = address_to_bech32(&moltbot_address);
-    
-    // Fund Moltbot
-    println!("Funding Moltbot: {}", moltbot_address_bech32);
-    interactor.tx().from(&wallet_alice).to(&moltbot_address).egld(1_000_000_000_000_000_000u64).run().await;
 
-    // Create PEM
-    // Use absolute path for safety when passing to child process
+    println!("Funding Moltbot: {}", moltbot_address_bech32);
+    interactor
+        .tx()
+        .from(&alice)
+        .to(&moltbot_address)
+        .egld(1_000_000_000_000_000_000u64)
+        .run()
+        .await;
+
+    // Ensure cross-shard funding is settled
+    generate_blocks_on_simulator(10).await;
+
+    // Create PEM file
     let project_root = std::env::current_dir().unwrap();
     let pem_filename = format!("temp_moltbot_{}.pem", hex::encode(&moltbot_pk[0..4]));
     let pem_path = project_root.join("tests").join(&pem_filename);
-    
-    create_pem_file(pem_path.to_str().unwrap(), &moltbot_pk, &moltbot_address_bech32);
+    create_pem_file(
+        pem_path.to_str().unwrap(),
+        &moltbot_pk,
+        &moltbot_address_bech32,
+    );
     println!("Created PEM at: {:?}", pem_path);
 
-    // 6. Run Registration Script
-    let status = std::process::Command::new("npm")
+    // 5. Run Registration Script (Direct Mode — wallet is funded)
+    println!("\n═══ Running Moltbot Registration (Direct TX) ═══");
+    let output = std::process::Command::new("npm")
         .arg("run")
         .arg("register")
         .current_dir("../moltbot-starter-kit")
         .env("MULTIVERSX_PRIVATE_KEY", pem_path.to_str().unwrap())
         .env("MULTIVERSX_API_URL", GATEWAY_URL)
         .env("IDENTITY_REGISTRY_ADDRESS", &registry_address)
-        .env("MULTIVERSX_CHAIN_ID", "chain")
-        // Also provide Facilitator URL if needed by config? 
-        // Config defaults to localhost:4000 for Facilitator.
-        // We started it on 3000.
-        .env("X402_FACILITATOR_URL", format!("http://localhost:{}", FACILITATOR_PORT))
-        .status()
+        .env("MULTIVERSX_CHAIN_ID", &chain_id)
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .output()
         .expect("Failed to run register script");
 
-    assert!(status.success(), "Registration script failed");
-    
-    // Cleanup PEM
-    let _ = fs::remove_file(pem_path);
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    println!("Script Stdout: {}", stdout);
+    if !stderr.is_empty() {
+        println!("Script Stderr: {}", stderr);
+    }
 
-    // 7. Verify On-Chain
-    // We expect the Moltbot address to be registered.
-    // We can call `get_agent_id` or `get_agent_data`.
-    // Let's print the agent details.
-    
-    println!("Verifying registration for: {}", moltbot_address_bech32);
-    
-    // Use raw call to get data or just check if it doesn't revert.
-    // The `register_agent` script sets name "Moltbot".
-    
-    // Query: getAgentIds
-    // Query: getAgentData(agent_id)
-    
-    // We can try to assume 1st agent is ID 1.
-    
-    // Or we can try to call 'getAgentId' if it exists.
-    // `mx-8004` usually has `get_agent_id(address)`.
-    
-    // This part depends on `mx-8004` logic.
+    assert!(
+        output.status.success(),
+        "Registration script failed:\n{}",
+        stderr
+    );
+    assert!(
+        stdout.contains("Transaction Sent"),
+        "Should broadcast directly (not via relayer). stdout: {}",
+        stdout
+    );
+    println!("✅ register_agent broadcast SUCCESS (direct)");
+
+    // Generate blocks to process the registration transaction
+    generate_blocks_on_simulator(10).await;
+
+    // 6. Verify On-Chain via vmQuery
+    println!("\n═══ On-Chain Verification ═══");
+    let client = reqwest::Client::new();
+
+    // get_agent_id takes 0 args, returns variadic<multi<u64, Address>> — all agent mappings
+    let vm_query = json!({
+        "scAddress": registry_address,
+        "funcName": "get_agent_id",
+        "args": []
+    });
+
+    let vm_res = client
+        .post(format!("{}/vm-values/query", GATEWAY_URL))
+        .json(&vm_query)
+        .send()
+        .await
+        .expect("VM query failed");
+
+    let vm_body: Value = vm_res.json().await.unwrap();
+    println!(
+        "get_agent_id response: {}",
+        serde_json::to_string_pretty(&vm_body["data"]["data"]).unwrap_or_default()
+    );
+
+    let return_code = vm_body["data"]["data"]["returnCode"]
+        .as_str()
+        .unwrap_or("unknown");
+    assert_eq!(return_code, "ok", "get_agent_id query failed: {}", vm_body);
+
+    let return_data = vm_body["data"]["data"]["returnData"]
+        .as_array()
+        .expect("returnData not found");
+
+    let agent_nonce_b64 = return_data[0].as_str().unwrap_or("");
+    assert!(
+        !agent_nonce_b64.is_empty(),
+        "Agent should have a non-zero ID after registration. returnData: {:?}",
+        return_data
+    );
+
+    let nonce_bytes = base64::engine::general_purpose::STANDARD
+        .decode(agent_nonce_b64)
+        .unwrap();
+    let mut agent_nonce_val = 0u64;
+    for b in &nonce_bytes {
+        agent_nonce_val = (agent_nonce_val << 8) | (*b as u64);
+    }
+    println!(
+        "✅ Agent registered on-chain with NFT nonce: {}",
+        agent_nonce_val
+    );
+
+    // 7. Cleanup
+    let _ = std::fs::remove_file(&pem_path);
+    println!("✅ Suite E Complete: Moltbot direct registration PASSED.");
 }

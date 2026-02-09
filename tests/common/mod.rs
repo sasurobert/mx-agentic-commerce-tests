@@ -159,7 +159,16 @@ impl<'a> IdentityRegistryInteractor<'a> {
         let uri_buf: ManagedBuffer<StaticApi> = ManagedBuffer::new_from_bytes(uri.as_bytes());
         let pk_buf: ManagedBuffer<StaticApi> = ManagedBuffer::new_from_bytes(&[0u8; 32]);
 
-        // Encode metadata
+        // Contract uses #[allow_multiple_var_args] with TWO MultiValueEncodedCounted params:
+        //   metadata: MultiValueEncodedCounted<MetadataEntry>
+        //   services: MultiValueEncodedCounted<ServiceConfigInput>
+        // Both require explicit u32 counts, even when empty.
+
+        // Metadata count
+        let metadata_count = metadata.len() as u32;
+        let metadata_count_buf: ManagedBuffer<StaticApi> =
+            ManagedBuffer::new_from_bytes(&metadata_count.to_be_bytes());
+
         let mut request = self
             .interactor
             .tx()
@@ -169,25 +178,32 @@ impl<'a> IdentityRegistryInteractor<'a> {
             .raw_call("register_agent")
             .argument(&name_buf)
             .argument(&uri_buf)
-            .argument(&pk_buf);
+            .argument(&pk_buf)
+            .argument(&metadata_count_buf);
 
         if !metadata.is_empty() {
-            let mut encoded_bytes = Vec::new();
             for (key, value) in metadata {
-                // Key (ManagedBuffer nested encode: u32 len + bytes)
+                // Each MetadataEntry is nested-encoded: {key: ManagedBuffer, value: ManagedBuffer}
+                let mut encoded_bytes = Vec::new();
                 let key_len = (key.len() as u32).to_be_bytes();
                 encoded_bytes.extend_from_slice(&key_len);
                 encoded_bytes.extend_from_slice(key.as_bytes());
 
-                // Value (ManagedBuffer nested encode: u32 len + bytes)
                 let val_len = (value.len() as u32).to_be_bytes();
                 encoded_bytes.extend_from_slice(&val_len);
                 encoded_bytes.extend_from_slice(&value);
+
+                let encoded_buf: ManagedBuffer<StaticApi> =
+                    ManagedBuffer::new_from_bytes(&encoded_bytes);
+                request = request.argument(&encoded_buf);
             }
-            let encoded_buf: ManagedBuffer<StaticApi> =
-                ManagedBuffer::new_from_bytes(&encoded_bytes);
-            request = request.argument(&encoded_buf);
         }
+
+        // Services count (always 0 — not supported in this interactor)
+        let services_count: u32 = 0;
+        let services_count_buf: ManagedBuffer<StaticApi> =
+            ManagedBuffer::new_from_bytes(&services_count.to_be_bytes());
+        request = request.argument(&services_count_buf);
 
         request.run().await;
 

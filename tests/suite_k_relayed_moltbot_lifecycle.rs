@@ -1,14 +1,14 @@
-use mx_agentic_commerce_tests::ProcessManager;
 use multiversx_sc_snippets::imports::*;
-use tokio::time::{sleep, Duration};
-use std::process::Stdio;
+use mx_agentic_commerce_tests::ProcessManager;
 use serde_json::{json, Value};
 use std::fs;
+use std::process::Stdio;
+use tokio::time::{sleep, Duration};
 
 mod common;
 use common::{
-    GATEWAY_URL, IdentityRegistryInteractor,
-    generate_random_private_key, create_pem_file, address_to_bech32,
+    address_to_bech32, create_pem_file, generate_blocks_on_simulator, generate_random_private_key,
+    IdentityRegistryInteractor, GATEWAY_URL,
 };
 
 const RELAYER_PORT: u16 = 3003;
@@ -32,8 +32,7 @@ async fn test_relayed_moltbot_full_lifecycle() {
     pm.start_chain_simulator(8085).expect("Failed to start Sim");
     sleep(Duration::from_secs(2)).await;
 
-    let mut interactor = Interactor::new(GATEWAY_URL).await
-        .use_chain_simulator(true);
+    let mut interactor = Interactor::new(GATEWAY_URL).await.use_chain_simulator(true);
 
     let chain_id = common::get_simulator_chain_id().await;
     println!("Simulator ChainID: {}", chain_id);
@@ -45,7 +44,8 @@ async fn test_relayed_moltbot_full_lifecycle() {
     let registry_addr = address_to_bech32(registry.address());
 
     registry.issue_token("AgentNFT", "AGENTNFT").await;
-    sleep(Duration::from_secs(2)).await;
+    generate_blocks_on_simulator(20).await;
+    sleep(Duration::from_millis(500)).await;
 
     // Temp directories
     let project_root = std::env::current_dir().unwrap();
@@ -66,12 +66,20 @@ async fn test_relayed_moltbot_full_lifecycle() {
         let relayer_addr = relayer_addr_obj.to_bech32("erd").to_string();
         let relayer_sc_addr = Address::from_slice(relayer_addr_obj.as_bytes());
 
-        interactor.tx().from(&admin).to(&relayer_sc_addr)
-            .egld(1_000_000_000_000_000_000u64).run().await;
+        interactor
+            .tx()
+            .from(&admin)
+            .to(&relayer_sc_addr)
+            .egld(1_000_000_000_000_000_000u64)
+            .run()
+            .await;
 
         let relayer_pem = relayer_wallets_dir.join(format!("relayer_{}.pem", i));
         create_pem_file(relayer_pem.to_str().unwrap(), &relayer_pk, &relayer_addr);
     }
+
+    // Ensure cross-shard EGLD transfers settle (30 wallets across 3 shards)
+    generate_blocks_on_simulator(30).await;
 
     // 4. Start OpenClaw Relayer
     let relayer_env = vec![
@@ -90,7 +98,8 @@ async fn test_relayed_moltbot_full_lifecycle() {
         "dist/src/index.js",
         relayer_env,
         RELAYER_PORT,
-    ).expect("Failed to start Relayer");
+    )
+    .expect("Failed to start Relayer");
 
     // 5. Start Facilitator
     let store_path = temp_dir.join("facilitator.db");
@@ -113,7 +122,8 @@ async fn test_relayed_moltbot_full_lifecycle() {
         "dist/index.js",
         facilitator_env,
         FACILITATOR_PORT,
-    ).expect("Failed to start Facilitator");
+    )
+    .expect("Failed to start Facilitator");
     sleep(Duration::from_secs(2)).await;
 
     // ────────────────────────────────────
@@ -147,11 +157,19 @@ async fn test_relayed_moltbot_full_lifecycle() {
 
     let reg_stdout = String::from_utf8_lossy(&reg_output.stdout);
     println!("Registration stdout: {}", reg_stdout);
-    assert!(reg_output.status.success(), "Registration failed: {}", String::from_utf8_lossy(&reg_output.stderr));
-    assert!(reg_stdout.contains("Relayed Transaction Sent"), "Should use relay");
+    assert!(
+        reg_output.status.success(),
+        "Registration failed: {}",
+        String::from_utf8_lossy(&reg_output.stderr)
+    );
+    assert!(
+        reg_stdout.contains("Relayed Transaction Sent"),
+        "Should use relay"
+    );
     println!("✅ Phase A: Bot registered via Relayer");
 
-    sleep(Duration::from_secs(3)).await;
+    generate_blocks_on_simulator(30).await;
+    sleep(Duration::from_secs(1)).await;
 
     // ────────────────────────────────────
     // PHASE B: Payment via Facilitator Relayed V3
@@ -164,8 +182,13 @@ async fn test_relayed_moltbot_full_lifecycle() {
     let buyer_addr = address_to_bech32(&buyer_wallet.to_address());
     let buyer_sc_addr = Address::from_slice(buyer_wallet.to_address().as_bytes());
 
-    interactor.tx().from(&admin).to(&buyer_sc_addr)
-        .egld(5_000_000_000_000_000_000u64).run().await;
+    interactor
+        .tx()
+        .from(&admin)
+        .to(&buyer_sc_addr)
+        .egld(5_000_000_000_000_000_000u64)
+        .run()
+        .await;
 
     let buyer_pem = temp_dir.join("buyer.pem");
     create_pem_file(buyer_pem.to_str().unwrap(), &buyer_pk, &buyer_addr);
@@ -174,11 +197,17 @@ async fn test_relayed_moltbot_full_lifecycle() {
     // Get relayer address for buyer's shard from facilitator
     let client = reqwest::Client::new();
     let relayer_res = client
-        .get(format!("{}/relayer/address/{}", FACILITATOR_URL, buyer_addr))
-        .send().await.expect("Failed to get relayer address");
+        .get(format!(
+            "{}/relayer/address/{}",
+            FACILITATOR_URL, buyer_addr
+        ))
+        .send()
+        .await
+        .expect("Failed to get relayer address");
 
     let relayer_body: Value = relayer_res.json().await.unwrap();
-    let relayer_bech32 = relayer_body["relayerAddress"].as_str()
+    let relayer_bech32 = relayer_body["relayerAddress"]
+        .as_str()
         .expect("No relayerAddress");
     println!("Relayer for buyer: {}", relayer_bech32);
 
@@ -203,8 +232,8 @@ async fn test_relayed_moltbot_full_lifecycle() {
 
     assert!(sign_out.status.success(), "Signing failed");
     let payload_str = String::from_utf8_lossy(&sign_out.stdout);
-    let payload: Value = serde_json::from_str(payload_str.lines().last().unwrap())
-        .expect("Invalid JSON");
+    let payload: Value =
+        serde_json::from_str(payload_str.lines().last().unwrap()).expect("Invalid JSON");
 
     // Settle
     let settle_req = json!({
@@ -218,9 +247,11 @@ async fn test_relayed_moltbot_full_lifecycle() {
         }
     });
 
-    let res = client.post(format!("{}/settle", FACILITATOR_URL))
+    let res = client
+        .post(format!("{}/settle", FACILITATOR_URL))
         .json(&settle_req)
-        .send().await
+        .send()
+        .await
         .expect("Settle request failed");
 
     let status = res.status();
@@ -232,10 +263,14 @@ async fn test_relayed_moltbot_full_lifecycle() {
     // ────────────────────────────────────
     // VERIFICATION
     // ────────────────────────────────────
-    sleep(Duration::from_secs(3)).await;
+    generate_blocks_on_simulator(10).await;
+    sleep(Duration::from_secs(2)).await;
 
-    let events_res = client.get(format!("{}/events?unread=true", FACILITATOR_URL))
-        .send().await.expect("Failed to get events");
+    let events_res = client
+        .get(format!("{}/events?unread=true", FACILITATOR_URL))
+        .send()
+        .await
+        .expect("Failed to get events");
 
     let events: Value = events_res.json().await.unwrap();
     let events_arr = events.as_array().expect("Events should be array");
