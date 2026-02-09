@@ -277,7 +277,10 @@ async fn test_relayed_agent_operations() {
                 const signer = UserSigner.fromPem(pemContent);
                 const sender = new Address('{}');
 
-                const abiJson = JSON.parse(fs.readFileSync('identity-registry.abi.json', 'utf8'));
+                const rawAbi = fs.readFileSync('identity-registry.abi.json', 'utf8')
+                    .replace(/"TokenId"/g, '"TokenIdentifier"')
+                    .replace(/"NonZeroBigUint"/g, '"BigUint"');
+                const abiJson = JSON.parse(rawAbi);
                 const abi = Abi.create(abiJson);
                 const config = new TransactionsFactoryConfig({{ chainID: '{}' }});
                 const factory = new SmartContractTransactionsFactory({{ config, abi }});
