@@ -8,8 +8,8 @@ use tokio::time::{sleep, Duration};
 
 mod common;
 use common::{
-    address_to_bech32, create_pem_file, generate_blocks_on_simulator, generate_random_private_key,
-    IdentityRegistryInteractor, GATEWAY_URL,
+    address_to_bech32, create_pem_file, fund_address_on_simulator, generate_blocks_on_simulator,
+    generate_random_private_key, IdentityRegistryInteractor, GATEWAY_URL,
 };
 
 const FACILITATOR_PORT: u16 = 3005;
@@ -21,15 +21,12 @@ const FACILITATOR_URL: &str = "http://localhost:3005";
 /// correctly broadcasts relayed transactions with pre-broadcast simulation.
 ///
 /// Flow:
-///   1. Deploy identity-registry, register Bob as agent
-///   2. Start facilitator with relayer wallets
-///   3. Alice signs x402 payment with relayer address (sign_x402_relayed.ts)
-///   4. POST /settle — facilitator runs sendRelayedV3:
-///      - Validates payload.relayer is present
-///      - Validates version >= 2
-///      - Reconstructs tx, adds relayerSignature
-///      - Simulates, then broadcasts
-///   5. Verify on-chain: Bob received funds + events emitted
+///   1. Fund wallets + relayer wallets FIRST (cross-shard settlement)
+///   2. Deploy identity-registry, register Bob as agent
+///   3. Start facilitator with relayer wallets
+///   4. Alice signs x402 payment with relayer address (sign_x402_relayed.ts)
+///   5. POST /settle — facilitator runs sendRelayedV3
+///   6. Verify on-chain: Bob received funds + events emitted
 #[tokio::test]
 async fn test_relayed_facilitator_settle() {
     let mut pm = ProcessManager::new();
@@ -45,13 +42,21 @@ async fn test_relayed_facilitator_settle() {
 
     let admin = interactor.register_wallet(test_wallets::alice()).await;
 
-    // Setup Bob (Seller) — fund BEFORE creating registry (borrows interactor)
+    // Top up admin with 100,000 EGLD (chain sim initial balance is only ~10 EGLD)
+    let admin_bech32 = address_to_bech32(&admin);
+    fund_address_on_simulator(&admin_bech32, "100000000000000000000000").await; // 100,000 EGLD
+    println!("Admin topped up with 100,000 EGLD");
+
+    // ────────────────────────────────────────────
+    // 2. FUND ALL WALLETS FIRST (before registry deployment)
+    // ────────────────────────────────────────────
+
+    // Setup Bob (Seller)
     let bob_pk = generate_random_private_key();
     let bob_wallet = Wallet::from_private_key(&bob_pk).unwrap();
     let bob_addr = address_to_bech32(&bob_wallet.to_address());
     let bob_sc_addr = Address::from_slice(bob_wallet.to_address().as_bytes());
 
-    // Fund Bob so he can register
     interactor
         .tx()
         .from(&admin)
@@ -60,7 +65,7 @@ async fn test_relayed_facilitator_settle() {
         .run()
         .await;
 
-    // Setup Alice (Buyer) — FUNDED
+    // Setup Alice (Buyer)
     let alice_pk = generate_random_private_key();
     let alice_wallet = Wallet::from_private_key(&alice_pk).unwrap();
     let alice_addr = address_to_bech32(&alice_wallet.to_address());
@@ -74,19 +79,7 @@ async fn test_relayed_facilitator_settle() {
         .run()
         .await; // 5 EGLD
 
-    // 2. Deploy Registry & Register Bob (borrows interactor mutably)
-    let mut registry = IdentityRegistryInteractor::init(&mut interactor, admin.clone()).await;
-    let registry_addr = address_to_bech32(registry.address());
-
-    registry.issue_token("AgentNFT", "AGENTNFT").await;
-    generate_blocks_on_simulator(20).await;
-    sleep(Duration::from_millis(500)).await;
-
-    registry
-        .register_agent("BobAgent", "https://bob.example.com", vec![])
-        .await;
-
-    // Save Alice PEM
+    // Setup temp dir and relayer wallets
     let project_root = std::env::current_dir().unwrap();
     let temp_dir = project_root.join("tests").join("temp_suite_j");
     if temp_dir.exists() {
@@ -98,10 +91,11 @@ async fn test_relayed_facilitator_settle() {
     create_pem_file(alice_pem.to_str().unwrap(), &alice_pk, &alice_addr);
     let alice_pem_abs = fs::canonicalize(&alice_pem).expect("Failed to canonicalize");
 
-    // 3. Setup Relayer Wallets for Facilitator
+    // Fund 30 relayer wallets (1 EGLD each)
     let relayer_wallets_dir = temp_dir.join("relayer_wallets");
     fs::create_dir_all(&relayer_wallets_dir).unwrap();
 
+    println!("Generating 30 Relayer Wallets...");
     for i in 0..30 {
         let relayer_pk = generate_random_private_key();
         let relayer_wallet = Wallet::from_private_key(&relayer_pk).unwrap();
@@ -120,14 +114,39 @@ async fn test_relayed_facilitator_settle() {
         let relayer_pem = relayer_wallets_dir.join(format!("relayer_{}.pem", i));
         create_pem_file(relayer_pem.to_str().unwrap(), &relayer_pk, &relayer_addr);
     }
+    println!("All relayer wallets funded.");
 
-    // Ensure cross-shard EGLD transfers settle (30 wallets across 3 shards)
+    // Ensure cross-shard EGLD transfers settle
     generate_blocks_on_simulator(30).await;
+    sleep(Duration::from_millis(500)).await;
+
+    // ────────────────────────────────────────────
+    // 3. DEPLOY REGISTRY + REGISTER BOB
+    //    (borrows interactor mutably — do after wallet funding)
+    // ────────────────────────────────────────────
+    let registry_addr;
+    {
+        let mut registry = IdentityRegistryInteractor::init(&mut interactor, admin.clone()).await;
+        registry_addr = address_to_bech32(registry.address());
+        println!("Registry: {}", registry_addr);
+
+        registry.issue_token("AgentNFT", "AGENTNFT").await;
+        generate_blocks_on_simulator(20).await;
+        sleep(Duration::from_secs(1)).await;
+
+        registry
+            .register_agent("BobAgent", "https://bob.example.com", vec![])
+            .await;
+    }
+    // registry dropped — interactor borrow released
 
     // Final block generation to ensure ALL cross-shard EGLD transfers are settled
     generate_blocks_on_simulator(30).await;
+    sleep(Duration::from_millis(500)).await;
 
-    // 4. Start Facilitator with relayer wallets
+    // ────────────────────────────────────────────
+    // 4. START FACILITATOR WITH RELAYER WALLETS
+    // ────────────────────────────────────────────
     let store_path = temp_dir.join("facilitator.db");
     let env = vec![
         ("PORT", "3005"),
@@ -139,7 +158,7 @@ async fn test_relayed_facilitator_settle() {
         ("RELAYER_WALLETS_DIR", relayer_wallets_dir.to_str().unwrap()),
         ("STORAGE_TYPE", "json"),
         ("STORE_PATH", store_path.to_str().unwrap()),
-        ("SKIP_SIMULATION", "true"), // Skip simulation in settle (facilitator) for chain sim
+        ("SKIP_SIMULATION", "true"),
         ("LOG_LEVEL", "debug"),
     ];
 
@@ -170,19 +189,21 @@ async fn test_relayed_facilitator_settle() {
         .expect("relayerAddress not in response");
     println!("Relayer for Alice shard: {}", relayer_address_bech32);
 
-    // DEBUG: Check Relayer Balance
-    let (_, data_u5, _) = bech32::decode(relayer_address_bech32).expect("Invalid bech32");
-    let data = bech32::convert_bits(&data_u5, 5, 8, false).expect("Invalid bits");
+    // Verify relayer has funds
+    let (_, data) = bech32::decode(relayer_address_bech32).expect("Invalid bech32");
     let relayer_sc_addr_chk = Address::from_slice(&data);
-
     let relayer_acc = interactor.get_account(&relayer_sc_addr_chk).await;
-    println!("Relayer Balance: {}", relayer_acc.balance);
-
-    // Account balance is String in snippets, parse to u128
     let bal_u128 = relayer_acc.balance.parse::<u128>().unwrap_or(0);
-    assert!(bal_u128 > 0, "Relayer has 0 balance! Funding failed.");
+    assert!(
+        bal_u128 > 0,
+        "Relayer has 0 balance! Address: {}",
+        relayer_address_bech32
+    );
+    println!("Relayer balance: {} wei ✓", bal_u128);
 
-    // 5. Sign X402 Payment with relayer (sign_x402_relayed.ts)
+    // ────────────────────────────────────────────
+    // 5. SIGN X402 PAYMENT WITH RELAYER
+    // ────────────────────────────────────────────
     let alice_nonce = interactor.get_account(&alice_sc_addr).await.nonce;
     let payment_value = "1000000000000000000"; // 1 EGLD
 
@@ -220,7 +241,9 @@ async fn test_relayed_facilitator_settle() {
     );
     assert_eq!(payload_json["version"], 2, "Payload version must be 2");
 
-    // 6. Call /settle with the relayed payload
+    // ────────────────────────────────────────────
+    // 6. CALL /settle WITH THE RELAYED PAYLOAD
+    // ────────────────────────────────────────────
     let settle_req = json!({
         "scheme": "exact",
         "payload": payload_json,
@@ -247,7 +270,9 @@ async fn test_relayed_facilitator_settle() {
     assert!(body.contains("txHash"), "Should contain txHash");
     println!("✅ Relayed Settle: SUCCESS");
 
-    // 7. Verify Events
+    // ────────────────────────────────────────────
+    // 7. VERIFY EVENTS
+    // ────────────────────────────────────────────
     generate_blocks_on_simulator(10).await;
     sleep(Duration::from_secs(2)).await;
 

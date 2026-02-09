@@ -25,6 +25,29 @@ pub async fn get_simulator_chain_id() -> String {
         .to_string()
 }
 
+/// Fund an address on the chain simulator using /simulator/set-state.
+/// This bypasses the initial wallet balance limits (typically ~10 EGLD).
+/// `balance_wei` should be the full balance in wei (e.g. "100000000000000000000000" for 100,000 EGLD).
+pub async fn fund_address_on_simulator(address_bech32: &str, balance_wei: &str) {
+    let client = reqwest::Client::new();
+    let body = serde_json::json!([{
+        "address": address_bech32,
+        "balance": balance_wei,
+        "nonce": 0
+    }]);
+    let res = client
+        .post(format!("{}/simulator/set-state", GATEWAY_URL))
+        .json(&body)
+        .send()
+        .await
+        .expect("Failed to set state on simulator");
+    assert!(
+        res.status().is_success(),
+        "set-state failed: {}",
+        res.text().await.unwrap_or_default()
+    );
+}
+
 /// Generate blocks on the chain simulator (needed when broadcasting
 /// via external services like relayer/facilitator, since `interactor.tx().run()`
 /// auto-generates blocks but HTTP broadcasts don't).

@@ -7,8 +7,8 @@ use tokio::time::{sleep, Duration};
 
 mod common;
 use common::{
-    address_to_bech32, create_pem_file, generate_blocks_on_simulator, generate_random_private_key,
-    IdentityRegistryInteractor, GATEWAY_URL,
+    address_to_bech32, create_pem_file, fund_address_on_simulator, generate_blocks_on_simulator,
+    generate_random_private_key, IdentityRegistryInteractor, GATEWAY_URL,
 };
 
 const RELAYER_PORT: u16 = 3003;
@@ -36,6 +36,11 @@ async fn test_relayed_agent_operations() {
     println!("Simulator ChainID: {}", chain_id);
 
     let admin = interactor.register_wallet(test_wallets::alice()).await;
+
+    // Top up admin with 100,000 EGLD (chain sim initial balance is only ~10 EGLD)
+    let admin_bech32 = address_to_bech32(&admin);
+    fund_address_on_simulator(&admin_bech32, "100000000000000000000000").await;
+    println!("Admin topped up with 100,000 EGLD");
 
     // ────────────────────────────────────────────
     // 2. SETUP RELAYER WALLETS (30 to cover all shards)
