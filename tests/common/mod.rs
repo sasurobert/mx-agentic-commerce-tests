@@ -1,22 +1,28 @@
+use bech32::{self, Bech32, Hrp};
+use multiversx_sc::derive_imports::*;
+use multiversx_sc::types::{Address, CodeMetadata, ManagedBuffer};
 use multiversx_sc_snippets::imports::*;
-use multiversx_sc::derive_imports::*; 
-use multiversx_sc::types::{Address, ManagedBuffer, CodeMetadata};
-use bech32::{self, Hrp, Bech32};
 
 pub const GATEWAY_URL: &str = "http://localhost:8085";
 pub const WASM_PATH: &str = "artifacts/identity-registry.wasm";
+pub const VALIDATION_WASM_PATH: &str = "artifacts/validation-registry.wasm";
+pub const REPUTATION_WASM_PATH: &str = "artifacts/reputation-registry.wasm";
 
 pub async fn get_simulator_chain_id() -> String {
     let client = reqwest::Client::new();
-    let resp: serde_json::Value = client.get(format!("{}/network/config", GATEWAY_URL))
+    let resp: serde_json::Value = client
+        .get(format!("{}/network/config", GATEWAY_URL))
         .send()
         .await
         .expect("Failed to get network config")
         .json()
         .await
         .expect("Failed to parse network config");
-    
-    resp["data"]["config"]["erd_chain_id"].as_str().expect("Chain ID not found").to_string()
+
+    resp["data"]["config"]["erd_chain_id"]
+        .as_str()
+        .expect("Chain ID not found")
+        .to_string()
 }
 
 /// Generate blocks on the chain simulator (needed when broadcasting
@@ -25,13 +31,15 @@ pub async fn get_simulator_chain_id() -> String {
 pub async fn generate_blocks_on_simulator(num_blocks: u32) {
     let client = reqwest::Client::new();
     let res = client
-        .post(format!("{}/simulator/generate-blocks/{}", GATEWAY_URL, num_blocks))
+        .post(format!(
+            "{}/simulator/generate-blocks/{}",
+            GATEWAY_URL, num_blocks
+        ))
         .send()
         .await
         .expect("Failed to generate blocks on simulator");
     assert!(res.status().is_success(), "generate-blocks failed");
 }
-
 
 use rand::RngCore;
 
@@ -47,26 +55,27 @@ pub fn address_to_bech32(address: &Address) -> String {
     bech32::encode::<Bech32>(hrp, address.as_bytes()).expect("Failed to encode address")
 }
 
-use base64::{Engine as _, engine::general_purpose};
+use base64::{engine::general_purpose, Engine as _};
 
 pub fn create_pem_file(file_path: &str, private_key_hex: &str, _address_bech32: &str) {
     let priv_bytes = hex::decode(private_key_hex).expect("Invalid hex");
     let wallet = Wallet::from_private_key(private_key_hex).expect("Wallet failed");
     let address = wallet.to_address(); // multiversx_chain_core::types::Address
-    let pub_bytes = address.as_bytes(); 
-    
+    let pub_bytes = address.as_bytes();
+
     // We need bech32 for formatting the PEM header/footer correctly if we were using it for calling, but here we just write it.
     let address_bech32 = address.to_bech32("erd").to_string();
 
     let mut combined = Vec::new(); // 32 priv + 32 pub
     combined.extend_from_slice(&priv_bytes);
     combined.extend_from_slice(pub_bytes);
-    
+
     let hex_combined = hex::encode(&combined);
     let b64 = general_purpose::STANDARD.encode(hex_combined);
-    
+
     // Split into lines of 64 chars for standard PEM format
-    let chunks: Vec<String> = b64.chars()
+    let chunks: Vec<String> = b64
+        .chars()
         .collect::<Vec<char>>()
         .chunks(64)
         .map(|c| c.iter().collect())
@@ -75,16 +84,16 @@ pub fn create_pem_file(file_path: &str, private_key_hex: &str, _address_bech32: 
 
     let pem_content = format!(
         "-----BEGIN PRIVATE KEY for {}-----\n{}\n-----END PRIVATE KEY for {}-----",
-        address_bech32,
-        b64_formatted,
-        address_bech32
+        address_bech32, b64_formatted, address_bech32
     );
-    
+
     std::fs::write(file_path, pem_content).expect("Failed to write PEM");
 }
 
 #[type_abi]
-#[derive(TopEncode, TopDecode, ManagedVecItem, NestedEncode, NestedDecode, Clone, PartialEq, Debug)]
+#[derive(
+    TopEncode, TopDecode, ManagedVecItem, NestedEncode, NestedDecode, Clone, PartialEq, Debug,
+)]
 pub struct MetadataEntry<M: ManagedTypeApi> {
     pub key: ManagedBuffer<M>,
     pub value: ManagedBuffer<M>,
@@ -101,9 +110,9 @@ impl<'a> IdentityRegistryInteractor<'a> {
         println!("Reading WASM from: {}", WASM_PATH);
         let wasm_bytes = std::fs::read(WASM_PATH).expect("Failed to read WASM file");
         println!("Read WASM size: {}", wasm_bytes.len());
-        
+
         let code_buf = ManagedBuffer::new_from_bytes(&wasm_bytes);
-        
+
         interactor.generate_blocks_until_all_activations().await;
 
         let contract_address = interactor
@@ -116,7 +125,7 @@ impl<'a> IdentityRegistryInteractor<'a> {
             .returns(ReturnsNewAddress)
             .run()
             .await;
-        
+
         println!("Deployed Identity Registry at: {}", contract_address);
 
         Self {
@@ -129,29 +138,30 @@ impl<'a> IdentityRegistryInteractor<'a> {
     pub async fn issue_token(&mut self, name: &str, ticker: &str) {
         let name_buf: ManagedBuffer<StaticApi> = ManagedBuffer::new_from_bytes(name.as_bytes());
         let ticker_buf: ManagedBuffer<StaticApi> = ManagedBuffer::new_from_bytes(ticker.as_bytes());
-        
+
         self.interactor
             .tx()
             .from(&self.wallet_address)
             .to(&self.contract_address)
             .gas(600_000_000)
-            .egld(50_000_000_000_000_000u64) 
+            .egld(50_000_000_000_000_000u64)
             .raw_call("issue_token")
             .argument(&name_buf)
             .argument(&ticker_buf)
             .run()
             .await;
-            
+
         println!("Issued Token: {}", ticker);
     }
 
     pub async fn register_agent(&mut self, name: &str, uri: &str, metadata: Vec<(&str, Vec<u8>)>) {
         let name_buf: ManagedBuffer<StaticApi> = ManagedBuffer::new_from_bytes(name.as_bytes());
         let uri_buf: ManagedBuffer<StaticApi> = ManagedBuffer::new_from_bytes(uri.as_bytes());
-        let pk_buf: ManagedBuffer<StaticApi> = ManagedBuffer::new_from_bytes(&[0u8; 32]); 
-        
+        let pk_buf: ManagedBuffer<StaticApi> = ManagedBuffer::new_from_bytes(&[0u8; 32]);
+
         // Encode metadata
-        let mut request = self.interactor
+        let mut request = self
+            .interactor
             .tx()
             .from(&self.wallet_address)
             .to(&self.contract_address)
@@ -162,27 +172,28 @@ impl<'a> IdentityRegistryInteractor<'a> {
             .argument(&pk_buf);
 
         if !metadata.is_empty() {
-             let mut encoded_bytes = Vec::new();
-             for (key, value) in metadata {
-                  // Key (ManagedBuffer nested encode: u32 len + bytes)
-                  let key_len = (key.len() as u32).to_be_bytes();
-                  encoded_bytes.extend_from_slice(&key_len);
-                  encoded_bytes.extend_from_slice(key.as_bytes());
+            let mut encoded_bytes = Vec::new();
+            for (key, value) in metadata {
+                // Key (ManagedBuffer nested encode: u32 len + bytes)
+                let key_len = (key.len() as u32).to_be_bytes();
+                encoded_bytes.extend_from_slice(&key_len);
+                encoded_bytes.extend_from_slice(key.as_bytes());
 
-                  // Value (ManagedBuffer nested encode: u32 len + bytes)
-                  let val_len = (value.len() as u32).to_be_bytes();
-                  encoded_bytes.extend_from_slice(&val_len);
-                  encoded_bytes.extend_from_slice(&value);
-             }
-             let encoded_buf: ManagedBuffer<StaticApi> = ManagedBuffer::new_from_bytes(&encoded_bytes);
-             request = request.argument(&encoded_buf);
+                // Value (ManagedBuffer nested encode: u32 len + bytes)
+                let val_len = (value.len() as u32).to_be_bytes();
+                encoded_bytes.extend_from_slice(&val_len);
+                encoded_bytes.extend_from_slice(&value);
+            }
+            let encoded_buf: ManagedBuffer<StaticApi> =
+                ManagedBuffer::new_from_bytes(&encoded_bytes);
+            request = request.argument(&encoded_buf);
         }
 
         request.run().await;
-            
+
         println!("Registered Agent: {}", name);
     }
-    
+
     pub fn address(&self) -> &Address {
         &self.contract_address
     }

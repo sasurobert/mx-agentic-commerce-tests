@@ -20,6 +20,7 @@ hex = "0.4.3"
 rand = "0.8"
 bech32 = "0.11.1"
 identity-registry-interactor = { version = "0.0.0", path = "../mx-8004/identity-registry/interactor" }
+common = { path = "../mx-8004/common" }
 
 # Add path dependencies to the other crates if they are Rust crates
 # mx-8004 = { path = "../mx-8004" } 

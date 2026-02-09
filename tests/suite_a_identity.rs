@@ -1,11 +1,14 @@
-use identity_registry_interactor::identity_registry_proxy::{IdentityRegistryProxy, MetadataEntry};
+use identity_registry_interactor::identity_registry_proxy::IdentityRegistryProxy;
 use multiversx_sc_scenario::imports::InterpreterContext;
+use multiversx_sc_snippets::imports::StaticApi;
 use multiversx_sc_snippets::imports::*;
 use mx_agentic_commerce_tests::ProcessManager;
-use tokio::time::{Duration, sleep};
+use tokio::time::{sleep, Duration};
 
-mod common;
-use common::GATEWAY_URL;
+#[path = "common/mod.rs"]
+mod test_utils;
+use ::common::{MetadataEntry, ServiceConfigInput};
+use test_utils::GATEWAY_URL;
 
 #[tokio::test]
 async fn test_identity_registry_flow() {
@@ -16,9 +19,10 @@ async fn test_identity_registry_flow() {
     sleep(Duration::from_secs(2)).await;
 
     let mut interactor = Interactor::new(GATEWAY_URL).await.use_chain_simulator(true);
+    let mut interactor = Interactor::new(GATEWAY_URL).await.use_chain_simulator(true);
 
     let wallet_alice = interactor.register_wallet(test_wallets::alice()).await;
-    
+
     interactor.generate_blocks_until_all_activations().await;
 
     println!("Identity Registry Flow Test Started");
@@ -71,18 +75,18 @@ async fn test_identity_registry_flow() {
     println!("Issued Token");
 
     // Prepare Metadata
-    let mut metadata_entries = ManagedVec::new();
+    let mut metadata_entries = MultiValueEncodedCounted::new();
     let price: u64 = 1_000_000_000_000_000_000;
 
     let entry1 = MetadataEntry {
-        key: ManagedBuffer::new_from_bytes(b"price:default"),
-        value: ManagedBuffer::new_from_bytes(&price.to_be_bytes()),
+        key: ManagedBuffer::<StaticApi>::new_from_bytes(b"price:default"),
+        value: ManagedBuffer::<StaticApi>::new_from_bytes(&price.to_be_bytes()),
     };
     metadata_entries.push(entry1);
 
     let entry2 = MetadataEntry {
-        key: ManagedBuffer::new_from_bytes(b"token:default"),
-        value: ManagedBuffer::new_from_bytes(b"EGLD"),
+        key: ManagedBuffer::<StaticApi>::new_from_bytes(b"token:default"),
+        value: ManagedBuffer::<StaticApi>::new_from_bytes(b"EGLD"),
     };
     metadata_entries.push(entry2);
 
@@ -97,7 +101,8 @@ async fn test_identity_registry_flow() {
             ManagedBuffer::new_from_bytes(b"MyAgent"),
             ManagedBuffer::new_from_bytes(b"https://example.com/agent.json"),
             ManagedBuffer::new_from_bytes(&[0u8; 32]), // dummy pk
-            OptionalValue::Some(metadata_entries),
+            metadata_entries,
+            MultiValueEncodedCounted::<StaticApi, ServiceConfigInput<StaticApi>>::new(),
         )
         .run()
         .await;

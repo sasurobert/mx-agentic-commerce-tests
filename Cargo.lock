@@ -255,6 +255,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "common"
+version = "0.1.0"
+dependencies = [
+ "multiversx-sc",
+]
+
+[[package]]
 name = "const-oid"
 version = "0.9.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -962,6 +969,7 @@ dependencies = [
 name = "identity-registry"
 version = "0.1.0"
 dependencies = [
+ "common",
  "multiversx-sc",
  "multiversx-sc-modules",
 ]
@@ -971,6 +979,7 @@ name = "identity-registry-interactor"
 version = "0.0.0"
 dependencies = [
  "clap",
+ "common",
  "identity-registry",
  "multiversx-sc",
  "multiversx-sc-snippets",
@@ -1413,6 +1422,7 @@ dependencies = [
  "anyhow",
  "base64 0.21.7",
  "bech32",
+ "common",
  "hex",
  "identity-registry-interactor",
  "multiversx-sc",
