@@ -1,3 +1,5 @@
+#![allow(dead_code, unused_imports)]
+
 use bech32::{self, Bech32, Hrp};
 use multiversx_sc::derive_imports::*;
 use multiversx_sc::types::{Address, CodeMetadata, ManagedBuffer};
