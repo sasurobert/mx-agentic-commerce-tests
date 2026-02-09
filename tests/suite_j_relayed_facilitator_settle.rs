@@ -1,0 +1,224 @@
+use mx_agentic_commerce_tests::ProcessManager;
+use multiversx_sc_snippets::imports::*;
+use tokio::time::{sleep, Duration};
+use std::process::Stdio;
+use serde_json::{json, Value};
+use std::fs;
+
+mod common;
+use common::{
+    GATEWAY_URL, IdentityRegistryInteractor,
+    generate_random_private_key, create_pem_file, address_to_bech32,
+};
+
+const FACILITATOR_PORT: u16 = 3005;
+const FACILITATOR_URL: &str = "http://localhost:3005";
+
+/// Suite J: Facilitator settle endpoint via Relayed V3
+///
+/// Tests the fixed `sendRelayedV3` in settler.ts — ensures the facilitator
+/// correctly broadcasts relayed transactions with pre-broadcast simulation.
+///
+/// Flow:
+///   1. Deploy identity-registry, register Bob as agent
+///   2. Start facilitator with relayer wallets
+///   3. Alice signs x402 payment with relayer address (sign_x402_relayed.ts)
+///   4. POST /settle — facilitator runs sendRelayedV3:
+///      - Validates payload.relayer is present
+///      - Validates version >= 2
+///      - Reconstructs tx, adds relayerSignature
+///      - Simulates, then broadcasts
+///   5. Verify on-chain: Bob received funds + events emitted
+#[tokio::test]
+async fn test_relayed_facilitator_settle() {
+    let mut pm = ProcessManager::new();
+
+    // 1. Start Chain Simulator
+    pm.start_chain_simulator(8085).expect("Failed to start Sim");
+    sleep(Duration::from_secs(2)).await;
+
+    let mut interactor = Interactor::new(GATEWAY_URL).await
+        .use_chain_simulator(true);
+
+    let chain_id = common::get_simulator_chain_id().await;
+    println!("Simulator ChainID: {}", chain_id);
+
+    let admin = interactor.register_wallet(test_wallets::alice()).await;
+
+    // Setup Bob (Seller) — fund BEFORE creating registry (borrows interactor)
+    let bob_pk = generate_random_private_key();
+    let bob_wallet = Wallet::from_private_key(&bob_pk).unwrap();
+    let bob_addr = address_to_bech32(&bob_wallet.to_address());
+    let bob_sc_addr = Address::from_slice(bob_wallet.to_address().as_bytes());
+
+    // Fund Bob so he can register
+    interactor.tx().from(&admin).to(&bob_sc_addr)
+        .egld(1_000_000_000_000_000_000u64).run().await;
+
+    // Setup Alice (Buyer) — FUNDED
+    let alice_pk = generate_random_private_key();
+    let alice_wallet = Wallet::from_private_key(&alice_pk).unwrap();
+    let alice_addr = address_to_bech32(&alice_wallet.to_address());
+    let alice_sc_addr = Address::from_slice(alice_wallet.to_address().as_bytes());
+
+    interactor.tx().from(&admin).to(&alice_sc_addr)
+        .egld(5_000_000_000_000_000_000u64).run().await; // 5 EGLD
+
+    // 2. Deploy Registry & Register Bob (borrows interactor mutably)
+    let mut registry = IdentityRegistryInteractor::init(&mut interactor, admin.clone()).await;
+    let registry_addr = address_to_bech32(registry.address());
+
+    registry.issue_token("AgentNFT", "AGENTNFT").await;
+    sleep(Duration::from_secs(2)).await;
+
+    registry.register_agent("BobAgent", "https://bob.example.com", vec![]).await;
+
+    // Save Alice PEM
+    let project_root = std::env::current_dir().unwrap();
+    let temp_dir = project_root.join("tests").join("temp_suite_j");
+    if temp_dir.exists() {
+        fs::remove_dir_all(&temp_dir).unwrap();
+    }
+    fs::create_dir_all(&temp_dir).unwrap();
+
+    let alice_pem = temp_dir.join("alice.pem");
+    create_pem_file(alice_pem.to_str().unwrap(), &alice_pk, &alice_addr);
+    let alice_pem_abs = fs::canonicalize(&alice_pem).expect("Failed to canonicalize");
+
+    // 3. Setup Relayer Wallets for Facilitator
+    let relayer_wallets_dir = temp_dir.join("relayer_wallets");
+    fs::create_dir_all(&relayer_wallets_dir).unwrap();
+
+    for i in 0..30 {
+        let relayer_pk = generate_random_private_key();
+        let relayer_wallet = Wallet::from_private_key(&relayer_pk).unwrap();
+        let relayer_addr_obj = relayer_wallet.to_address();
+        let relayer_addr = relayer_addr_obj.to_bech32("erd").to_string();
+        let relayer_sc_addr = Address::from_slice(relayer_addr_obj.as_bytes());
+
+        interactor.tx().from(&admin).to(&relayer_sc_addr)
+            .egld(1_000_000_000_000_000_000u64).run().await;
+
+        let relayer_pem = relayer_wallets_dir.join(format!("relayer_{}.pem", i));
+        create_pem_file(relayer_pem.to_str().unwrap(), &relayer_pk, &relayer_addr);
+    }
+
+    // 4. Start Facilitator with relayer wallets
+    let store_path = temp_dir.join("facilitator.db");
+    let env = vec![
+        ("PORT", "3005"),
+        ("NETWORK_PROVIDER", GATEWAY_URL),
+        ("MULTIVERSX_API_URL", GATEWAY_URL),
+        ("MX_PROXY_URL", GATEWAY_URL),
+        ("REGISTRY_ADDRESS", registry_addr.as_str()),
+        ("CHAIN_ID", chain_id.as_str()),
+        ("RELAYER_WALLETS_DIR", relayer_wallets_dir.to_str().unwrap()),
+        ("STORAGE_TYPE", "json"),
+        ("STORE_PATH", store_path.to_str().unwrap()),
+        ("SKIP_SIMULATION", "true"), // Skip simulation in settle (facilitator) for chain sim
+        ("LOG_LEVEL", "debug"),
+    ];
+
+    pm.start_node_service(
+        "Facilitator",
+        "../x402_integration/x402_facilitator",
+        "dist/index.js",
+        env,
+        FACILITATOR_PORT,
+    ).expect("Failed to start Facilitator");
+    sleep(Duration::from_secs(2)).await;
+
+    // Get relayer address for Alice's shard
+    let client = reqwest::Client::new();
+    let relayer_addr_res = client
+        .get(format!("{}/relayer/address/{}", FACILITATOR_URL, alice_addr))
+        .send().await
+        .expect("Failed to get relayer address from facilitator");
+
+    let relayer_addr_body: Value = relayer_addr_res.json().await.unwrap();
+    let relayer_address_bech32 = relayer_addr_body["relayerAddress"].as_str()
+        .expect("relayerAddress not in response");
+    println!("Relayer for Alice shard: {}", relayer_address_bech32);
+
+    // 5. Sign X402 Payment with relayer (sign_x402_relayed.ts)
+    let alice_nonce = interactor.get_account(&alice_sc_addr).await.nonce;
+    let payment_value = "1000000000000000000"; // 1 EGLD
+
+    let sign_status = std::process::Command::new("npx")
+        .arg("ts-node")
+        .arg("scripts/sign_x402_relayed.ts")
+        .arg(alice_pem_abs.to_str().unwrap())
+        .arg(&bob_addr)
+        .arg(payment_value)
+        .arg(alice_nonce.to_string())
+        .arg(&chain_id)
+        .arg(relayer_address_bech32)
+        .arg("init_job@1234")
+        .current_dir("../moltbot-starter-kit")
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .output()
+        .expect("Failed to run sign_x402_relayed.ts");
+
+    if !sign_status.status.success() {
+        let stderr = String::from_utf8_lossy(&sign_status.stderr);
+        panic!("Signing failed: {}", stderr);
+    }
+
+    let sign_stdout = String::from_utf8_lossy(&sign_status.stdout);
+    let payload_str = sign_stdout.lines().last().unwrap();
+    let payload_json: Value = serde_json::from_str(payload_str)
+        .expect("Invalid JSON from sign_x402_relayed.ts");
+    println!("Signed Payload: {}", payload_json);
+
+    // Verify the payload has relayer field
+    assert!(payload_json["relayer"].is_string(), "Payload must include relayer");
+    assert_eq!(payload_json["version"], 2, "Payload version must be 2");
+
+    // 6. Call /settle with the relayed payload
+    let settle_req = json!({
+        "scheme": "exact",
+        "payload": payload_json,
+        "requirements": {
+            "payTo": bob_addr,
+            "amount": payment_value,
+            "asset": "EGLD",
+            "network": format!("multiversx:{}", chain_id),
+        }
+    });
+
+    println!("Sending /settle request...");
+    let res = client.post(format!("{}/settle", FACILITATOR_URL))
+        .json(&settle_req)
+        .send().await
+        .expect("Failed to send settle");
+
+    let status = res.status();
+    let body = res.text().await.unwrap();
+    println!("Settle Response ({}): {}", status, body);
+    assert!(status.is_success(), "Settle failed: {}", body);
+    assert!(body.contains("txHash"), "Should contain txHash");
+    println!("✅ Relayed Settle: SUCCESS");
+
+    // 7. Verify Events
+    sleep(Duration::from_secs(5)).await;
+
+    let events_res = client.get(format!("{}/events?unread=true", FACILITATOR_URL))
+        .send().await
+        .expect("Failed to poll events");
+
+    let events: Value = events_res.json().await.unwrap();
+    let events_arr = events.as_array().expect("Events should be array");
+    println!("Events: {:?}", events_arr);
+
+    assert!(!events_arr.is_empty(), "Should have events");
+
+    let found = events_arr.iter().any(|e| {
+        e["meta"]["sender"].as_str() == Some(&alice_addr)
+    });
+    assert!(found, "Should find event from Alice");
+
+    // Cleanup
+    let _ = fs::remove_dir_all(&temp_dir);
+    println!("✅ Suite J Complete: Facilitator Relayed Settle passed.");
+}

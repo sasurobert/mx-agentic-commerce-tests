@@ -19,6 +19,19 @@ pub async fn get_simulator_chain_id() -> String {
     resp["data"]["config"]["erd_chain_id"].as_str().expect("Chain ID not found").to_string()
 }
 
+/// Generate blocks on the chain simulator (needed when broadcasting
+/// via external services like relayer/facilitator, since `interactor.tx().run()`
+/// auto-generates blocks but HTTP broadcasts don't).
+pub async fn generate_blocks_on_simulator(num_blocks: u32) {
+    let client = reqwest::Client::new();
+    let res = client
+        .post(format!("{}/simulator/generate-blocks/{}", GATEWAY_URL, num_blocks))
+        .send()
+        .await
+        .expect("Failed to generate blocks on simulator");
+    assert!(res.status().is_success(), "generate-blocks failed");
+}
+
 
 use rand::RngCore;
 
