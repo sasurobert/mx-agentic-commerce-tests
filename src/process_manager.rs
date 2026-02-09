@@ -37,6 +37,12 @@ impl ProcessManager {
              }
         }
 
+        // Check if port is already listening (idempotent start)
+        if TcpStream::connect(format!("127.0.0.1:{}", port)).is_ok() {
+            println!("Chain Simulator already running on port {}.", port);
+            return Ok(());
+        }
+
         let child = Command::new(&cmd_name)
             .arg("--server-port")
             .arg(port.to_string())

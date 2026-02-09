@@ -15,6 +15,9 @@ async fn test_relayed_registration() {
     let mut interactor = Interactor::new(GATEWAY_URL).await
         .use_chain_simulator(true);
 
+    let chain_id = common::get_simulator_chain_id().await;
+    println!("Simulator ChainID: {}", chain_id);
+
     let alice = interactor.register_wallet(test_wallets::alice()).await;
     
     // Deploy Registry
@@ -53,7 +56,7 @@ async fn test_relayed_registration() {
         ("IDENTITY_REGISTRY_ADDRESS", registry_addr.as_str()),
         ("RELAYER_WALLETS_DIR", relayer_wallets_dir.to_str().unwrap()),
         ("PORT", "3003"), // Different port
-        ("CHAIN_ID", "chain"),
+        ("CHAIN_ID", chain_id.as_str()),
         ("IS_TEST_ENV", "true"),
         ("SKIP_SIMULATION", "true") 
     ];
@@ -85,8 +88,8 @@ async fn test_relayed_registration() {
         .env("MULTIVERSX_PRIVATE_KEY", moltbot_pem.to_str().unwrap())
         .env("MULTIVERSX_API_URL", GATEWAY_URL)
         .env("IDENTITY_REGISTRY_ADDRESS", &registry_addr)
-        .env("CHAIN_ID", "chain")
-        .env("MULTIVERSX_CHAIN_ID", "chain")
+        .env("CHAIN_ID", &chain_id)
+        .env("MULTIVERSX_CHAIN_ID", &chain_id)
         .env("MULTIVERSX_RELAYER_URL", "http://localhost:3003")
         .env("FORCE_RELAYER", "true") // Enforce usage
         .stdout(Stdio::piped())

@@ -56,7 +56,15 @@ async fn test_multi_agent_payment_delegation() {
     let alice_sc_addr = Address::from_slice(alice_wallet.to_address().as_bytes());
     
     // Save Alice PEM
-    let alice_pem = Path::new("tests/temp_multi_agent/alice.pem");
+    // Ensure temp dir exists
+    let project_root = std::env::current_dir().unwrap();
+    let temp_dir = project_root.join("tests").join("temp_multi_agent");
+    if !temp_dir.exists() {
+        std::fs::create_dir_all(&temp_dir).unwrap();
+    }
+
+    // Save Alice PEM
+    let alice_pem = temp_dir.join("alice.pem");
     common::create_pem_file(alice_pem.to_str().unwrap(), &alice_pk, &alice_addr);
     let alice_pem_abs = fs::canonicalize(alice_pem).expect("Failed to canonicalize alice pem");
 
@@ -135,8 +143,9 @@ async fn test_multi_agent_payment_delegation() {
     // 4. Start Facilitator
     let env = vec![
         ("PORT", "3005"),
+        ("NETWORK_PROVIDER", sim_url), // CRITICAL FIX: Point to Simulator
         ("MULTIVERSX_API_URL", sim_url),
-        ("MX_PROXY_URL", sim_url), // Ensure both used
+        ("MX_PROXY_URL", sim_url), 
         ("PRIVATE_KEY", "e253a571ca153dc2aee845819f74bcc9773b0586edead15a94d728462b34ef8c"), // Random
         ("REGISTRY_ADDRESS", &registry_addr),
         ("CHAIN_ID", &chain_id), // Use dynamic ChainID

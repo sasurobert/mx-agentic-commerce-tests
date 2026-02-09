@@ -65,6 +65,7 @@ async fn test_facilitator_flow() {
         ("PORT", "3000"),
         ("PRIVATE_KEY", facilitator_pk.as_str()),
         ("REGISTRY_ADDRESS", registry_address.as_str()),
+        ("NETWORK_PROVIDER", GATEWAY_URL), // CRITICAL FIX
         ("GATEWAY_URL", GATEWAY_URL),
         ("CHAIN_ID", chain_id.as_str()), // Simulator chain ID
     ];
