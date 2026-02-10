@@ -14,3 +14,9 @@ pub mod test_settle_esdt;
 
 #[path = "pkg_4_facilitator/test_relayed_v3.rs"]
 pub mod test_relayed_v3;
+
+#[path = "pkg_4_facilitator/test_rejection_cases.rs"]
+pub mod test_rejection_cases;
+
+#[path = "pkg_4_facilitator/test_idempotency.rs"]
+pub mod test_idempotency;
