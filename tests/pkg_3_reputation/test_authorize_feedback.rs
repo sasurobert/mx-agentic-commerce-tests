@@ -1,3 +1,8 @@
+// ERC-8004: authorize_feedback has been removed.
+// Feedback is now submitted directly by the employer without authorization.
+// This test validates that the employer can submit feedback without
+// needing an authorize_feedback step.
+
 use multiversx_sc::types::ManagedBuffer;
 use multiversx_sc_snippets::imports::*;
 use mx_agentic_commerce_tests::ProcessManager;
@@ -6,7 +11,7 @@ use tokio::time::{sleep, Duration};
 use crate::common::GATEWAY_URL;
 
 #[tokio::test]
-async fn test_authorize_feedback() {
+async fn test_feedback_without_authorization() {
     let mut pm = ProcessManager::new();
     pm.start_chain_simulator(8085)
         .expect("Failed to start simulator");
@@ -20,7 +25,6 @@ async fn test_authorize_feedback() {
     let (mut identity, validation_addr, reputation_addr) =
         crate::common::deploy_all_registries(&mut interactor, owner.clone()).await;
 
-    // Register Agent
     identity
         .register_agent(
             &mut interactor,
@@ -31,7 +35,7 @@ async fn test_authorize_feedback() {
         .await;
     drop(identity);
 
-    // 2. Init Job & Verify (Prerequisite)
+    // 2. Init Job (Employer)
     let job_id = "job-auth-test";
     let job_id_buf = ManagedBuffer::<StaticApi>::new_from_bytes(job_id.as_bytes());
     let agent_nonce: u64 = 1;
@@ -39,7 +43,7 @@ async fn test_authorize_feedback() {
 
     interactor
         .tx()
-        .from(&employer) // Employer inits job
+        .from(&employer)
         .to(&validation_addr)
         .gas(20_000_000)
         .raw_call("init_job")
@@ -48,31 +52,32 @@ async fn test_authorize_feedback() {
         .run()
         .await;
 
-    // Verify job (owner simulates verification)
+    // 3. Submit Proof (Agent/Owner)
+    let proof_buf = ManagedBuffer::<StaticApi>::new_from_bytes(b"proof-hash-1");
     interactor
         .tx()
         .from(&owner)
         .to(&validation_addr)
-        .gas(10_000_000)
-        .raw_call("verify_job")
+        .gas(20_000_000)
+        .raw_call("submit_proof")
         .argument(&job_id_buf)
+        .argument(&proof_buf)
         .run()
         .await;
 
-    // 3. Authorize Feedback (Happy Path)
-    // Must be called by AGENT OWNER (Alice)
-    let employer_buf = ManagedBuffer::<StaticApi>::new_from_bytes(employer.as_bytes());
-
+    // 4. Submit Feedback directly (Employer) — no authorize_feedback needed (ERC-8004)
+    let rating: u64 = 85;
     interactor
         .tx()
-        .from(&owner)
+        .from(&employer)
         .to(&reputation_addr)
         .gas(10_000_000)
-        .raw_call("authorize_feedback")
+        .raw_call("submit_feedback")
         .argument(&job_id_buf)
-        .argument(&employer_buf)
+        .argument(&agent_nonce_buf)
+        .argument(&rating)
         .run()
         .await;
 
-    println!("Authorize Feedback Success");
+    println!("Feedback submitted without authorization — ERC-8004 compliant");
 }

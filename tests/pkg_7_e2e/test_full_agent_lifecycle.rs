@@ -67,32 +67,8 @@ async fn test_full_agent_lifecycle() {
 
     println!("Proof Submitted");
 
-    // 5. Verify Job (Validation) by Validator (Owner for now)
-    interactor
-        .tx()
-        .from(&owner)
-        .to(&validation_addr)
-        .gas(10_000_000)
-        .raw_call("verify_job")
-        .argument(&job_id_buf)
-        .run()
-        .await;
-
-    println!("Job Verified");
-
-    // 6. Authorize Feedback (Reputation) by Agent Owner
-    interactor
-        .tx()
-        .from(&owner)
-        .to(&reputation_addr)
-        .gas(10_000_000)
-        .raw_call("authorize_feedback")
-        .argument(&job_id_buf)
-        .argument(&employer)
-        .run()
-        .await;
-
-    println!("Feedback Authorized");
+    // ERC-8004: No verify_job or authorize_feedback needed
+    println!("ERC-8004: skipping verify_job and authorize_feedback");
 
     // 7. Submit Feedback (Reputation) by Employer
     let rating: u64 = 95;

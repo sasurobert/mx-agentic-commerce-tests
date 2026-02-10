@@ -698,16 +698,64 @@ impl ValidationRegistryInteractor {
             .await;
     }
 
-    pub async fn verify_job(&self, interactor: &mut Interactor, job_id: &str) {
+    pub async fn validation_request(
+        &self,
+        interactor: &mut Interactor,
+        job_id: &str,
+        validator_address: &Address,
+        request_uri: &str,
+        request_hash: &str,
+    ) {
         let job_id_buf: ManagedBuffer<StaticApi> = ManagedBuffer::new_from_bytes(job_id.as_bytes());
+        let validator_managed: ManagedAddress<StaticApi> =
+            ManagedAddress::from_address(validator_address);
+        let uri_buf: ManagedBuffer<StaticApi> =
+            ManagedBuffer::new_from_bytes(request_uri.as_bytes());
+        let hash_buf: ManagedBuffer<StaticApi> =
+            ManagedBuffer::new_from_bytes(request_hash.as_bytes());
 
         interactor
             .tx()
             .from(&self.wallet_address)
             .to(&self.contract_address)
             .gas(600_000_000)
-            .raw_call("verify_job")
+            .raw_call("validation_request")
             .argument(&job_id_buf)
+            .argument(&validator_managed)
+            .argument(&uri_buf)
+            .argument(&hash_buf)
+            .run()
+            .await;
+    }
+
+    pub async fn validation_response(
+        &self,
+        interactor: &mut Interactor,
+        request_hash: &str,
+        response: u8,
+        response_uri: &str,
+        response_hash: &str,
+        tag: &str,
+    ) {
+        let hash_buf: ManagedBuffer<StaticApi> =
+            ManagedBuffer::new_from_bytes(request_hash.as_bytes());
+        let uri_buf: ManagedBuffer<StaticApi> =
+            ManagedBuffer::new_from_bytes(response_uri.as_bytes());
+        let resp_hash_buf: ManagedBuffer<StaticApi> =
+            ManagedBuffer::new_from_bytes(response_hash.as_bytes());
+        let tag_buf: ManagedBuffer<StaticApi> = ManagedBuffer::new_from_bytes(tag.as_bytes());
+
+        interactor
+            .tx()
+            .from(&self.wallet_address)
+            .to(&self.contract_address)
+            .gas(600_000_000)
+            .raw_call("validation_response")
+            .argument(&hash_buf)
+            .argument(&response)
+            .argument(&uri_buf)
+            .argument(&resp_hash_buf)
+            .argument(&tag_buf)
             .run()
             .await;
     }

@@ -73,9 +73,25 @@ async fn test_job_lifecycle() {
         .submit_proof(&mut interactor, job_id, proof_hash)
         .await;
 
-    // 7. Verify Job
+    // 7. Validation Request + Response (ERC-8004)
     validation_interactor
-        .verify_job(&mut interactor, job_id)
+        .validation_request(
+            &mut interactor,
+            job_id,
+            &owner_address,
+            "https://val.uri",
+            "req_hash_001",
+        )
+        .await;
+    validation_interactor
+        .validation_response(
+            &mut interactor,
+            "req_hash_001",
+            80,
+            "https://resp.uri",
+            "resp_hash_001",
+            "quality",
+        )
         .await;
 
     // Cleanup

@@ -54,25 +54,7 @@ async fn test_append_response() {
         .argument(&proof)
         .run()
         .await;
-    interactor
-        .tx()
-        .from(&owner)
-        .to(&validation_addr)
-        .gas(10_000_000)
-        .raw_call("verify_job")
-        .argument(&job_id_buf)
-        .run()
-        .await;
-    interactor
-        .tx()
-        .from(&owner)
-        .to(&reputation_addr)
-        .gas(10_000_000)
-        .raw_call("authorize_feedback")
-        .argument(&job_id_buf)
-        .argument(&employer_buf)
-        .run()
-        .await;
+    // ERC-8004: No verify_job or authorize_feedback needed
     interactor
         .tx()
         .from(&employer)

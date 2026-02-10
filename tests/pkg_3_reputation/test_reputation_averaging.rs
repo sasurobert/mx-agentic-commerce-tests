@@ -65,27 +65,7 @@ async fn test_reputation_averaging() {
             .argument(&zero_proof)
             .run()
             .await;
-        // Verify
-        interactor
-            .tx()
-            .from(&owner)
-            .to(&validation_addr)
-            .gas(10_000_000)
-            .raw_call("verify_job")
-            .argument(&job_id_buf)
-            .run()
-            .await;
-        // Authorize
-        interactor
-            .tx()
-            .from(&owner)
-            .to(&reputation_addr)
-            .gas(10_000_000)
-            .raw_call("authorize_feedback")
-            .argument(&job_id_buf)
-            .argument(&employer)
-            .run()
-            .await;
+        // ERC-8004: No verify_job or authorize_feedback needed
         // Submit
         interactor
             .tx()
@@ -172,25 +152,7 @@ async fn test_max_rating() {
         .argument(&proof_buf)
         .run()
         .await;
-    interactor
-        .tx()
-        .from(&owner)
-        .to(&validation_addr)
-        .gas(10_000_000)
-        .raw_call("verify_job")
-        .argument(&job_id_buf)
-        .run()
-        .await;
-    interactor
-        .tx()
-        .from(&owner)
-        .to(&reputation_addr)
-        .gas(10_000_000)
-        .raw_call("authorize_feedback")
-        .argument(&job_id_buf)
-        .argument(&employer)
-        .run()
-        .await;
+    // ERC-8004: No verify_job or authorize_feedback needed
 
     // Submit max rating: 100
     interactor
@@ -271,25 +233,7 @@ async fn test_min_rating() {
             .argument(&proof_buf)
             .run()
             .await;
-        interactor
-            .tx()
-            .from(&owner)
-            .to(&validation_addr)
-            .gas(10_000_000)
-            .raw_call("verify_job")
-            .argument(&job_id_buf)
-            .run()
-            .await;
-        interactor
-            .tx()
-            .from(&owner)
-            .to(&reputation_addr)
-            .gas(10_000_000)
-            .raw_call("authorize_feedback")
-            .argument(&job_id_buf)
-            .argument(&employer)
-            .run()
-            .await;
+        // ERC-8004: No verify_job or authorize_feedback needed
         interactor
             .tx()
             .from(&employer)

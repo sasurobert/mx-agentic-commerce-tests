@@ -119,19 +119,7 @@ async fn test_chain_of_command() {
         .await;
     println!("C submitted proof for {}", job_bc);
 
-    // 6. Contract owner (Alice) verifies job-bc
-    interactor
-        .tx()
-        .from(&alice) // verify_job is owner-only
-        .to(&validation_addr)
-        .gas(10_000_000)
-        .raw_call("verify_job")
-        .argument(&job_bc_buf)
-        .run()
-        .await;
-    println!("Owner verified {}", job_bc);
-
-    // 7. Agent B submits proof for job-ab (using C's output)
+    // 6. Agent B submits proof for job-ab (using C's output)
     let proof_b = ManagedBuffer::<StaticApi>::new_from_bytes(b"beta-aggregated-output");
     interactor
         .tx()
@@ -145,53 +133,9 @@ async fn test_chain_of_command() {
         .await;
     println!("B submitted proof for {}", job_ab);
 
-    // 8. Contract owner (Alice) verifies job-ab
-    interactor
-        .tx()
-        .from(&alice) // verify_job is owner-only
-        .to(&validation_addr)
-        .gas(10_000_000)
-        .raw_call("verify_job")
-        .argument(&job_ab_buf)
-        .run()
-        .await;
-    println!("Owner verified {}", job_ab);
+    // ERC-8004: No verify_job or authorize_feedback needed
+    println!("ERC-8004: skipping verify_job and authorize_feedback");
 
-    // 9. Verify both jobs on-chain
-    let verified_ab: u64 = vm_query(
-        &mut interactor,
-        &validation_addr,
-        "is_job_verified",
-        vec![job_ab_buf.clone()],
-    )
-    .await;
-    let verified_bc: u64 = vm_query(
-        &mut interactor,
-        &validation_addr,
-        "is_job_verified",
-        vec![job_bc_buf.clone()],
-    )
-    .await;
-    assert!(verified_ab > 0, "job-ab should be verified");
-    assert!(verified_bc > 0, "job-bc should be verified");
-    println!(
-        "✅ Both jobs verified: ab={}, bc={}",
-        verified_ab, verified_bc
-    );
-
-    // 10. Feedback chain: B rates C, A rates B
-    // B (agent C's owner-side) authorizes + Alice rates C? No — C's owner (Carol) authorizes.
-    // Carol authorizes Bob for job-bc
-    interactor
-        .tx()
-        .from(&carol)
-        .to(&reputation_addr)
-        .gas(10_000_000)
-        .raw_call("authorize_feedback")
-        .argument(&job_bc_buf)
-        .argument(&bob)
-        .run()
-        .await;
     // Bob rates C
     interactor
         .tx()
@@ -206,18 +150,7 @@ async fn test_chain_of_command() {
         .await;
     println!("B rated C: 95");
 
-    // Bob (Agent B's owner) authorizes Alice for job-ab
-    interactor
-        .tx()
-        .from(&bob)
-        .to(&reputation_addr)
-        .gas(10_000_000)
-        .raw_call("authorize_feedback")
-        .argument(&job_ab_buf)
-        .argument(&alice)
-        .run()
-        .await;
-    // Alice rates B
+    // Alice rates B (ERC-8004: no authorization needed)
     interactor
         .tx()
         .from(&alice)

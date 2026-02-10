@@ -50,8 +50,8 @@ async fn vm_query(sc_address_bech32: &str, func_name: &str, args_hex: Vec<&str>)
 /// Full 3-registry lifecycle:
 /// 1. Deploy identity, validation, reputation
 /// 2. Register agent
-/// 3. init_job → submit_proof → verify_job
-/// 4. authorize_feedback → submit_feedback
+/// 3. init_job → submit_proof
+/// 4. submit_feedback (no authorization needed, ERC-8004)
 /// 5. Query reputation score → assert > 0
 #[tokio::test]
 async fn test_reputation_validation_loop() {
@@ -173,43 +173,10 @@ async fn test_reputation_validation_loop() {
         .await;
     println!("Proof submitted: {}", proof);
 
-    // ── 7. Verify Job (owner only) ──
-    interactor
-        .tx()
-        .from(&wallet_alice)
-        .to(&validation_addr)
-        .gas(10_000_000)
-        .raw_call("verify_job")
-        .argument(&job_id_buf)
-        .run()
-        .await;
-    println!("Job verified by owner");
+    // ── 7. ERC-8004: No verify_job or authorize_feedback needed ──
+    println!("ERC-8004: Skipping verify_job and authorize_feedback");
 
-    // ── 8. Check is_job_verified view via HTTP VM query ──
-    let result = vm_query(&validation_bech32, "is_job_verified", vec![&job_id_hex]).await;
-    assert!(!result.is_empty(), "VM query should return data");
-    // Boolean: 0x01 = true
-    let is_verified = !result[0].is_empty() && result[0][0] == 1;
-    assert!(is_verified, "Job should be verified. Got: {:?}", result[0]);
-    println!("is_job_verified: ✅ true");
-
-    // ── 9. Authorize Feedback ──
-    let employer_buf: ManagedBuffer<StaticApi> =
-        ManagedBuffer::new_from_bytes(wallet_alice.as_bytes());
-
-    interactor
-        .tx()
-        .from(&wallet_alice)
-        .to(&reputation_addr)
-        .gas(20_000_000)
-        .raw_call("authorize_feedback")
-        .argument(&job_id_buf)
-        .argument(&employer_buf)
-        .run()
-        .await;
-    println!("Feedback authorized for employer");
-
-    // ── 10. Submit Feedback (rating = 5) ──
+    // ── 8. Submit Feedback (rating = 5) ──
     let rating: u64 = 5;
     let rating_buf: ManagedBuffer<StaticApi> = ManagedBuffer::new_from_bytes(&rating.to_be_bytes());
 
@@ -248,6 +215,6 @@ async fn test_reputation_validation_loop() {
 
     println!("\nSuite N: Reputation & Validation Loop — PASSED ✅");
     println!("  Deployed: Identity, Validation, Reputation");
-    println!("  Flow: init_job → submit_proof → verify_job → authorize → feedback");
+    println!("  Flow: init_job → submit_proof → feedback (ERC-8004)");
     println!("  Score: {}", score_val);
 }

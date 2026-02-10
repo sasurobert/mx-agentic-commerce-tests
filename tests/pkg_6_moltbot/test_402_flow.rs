@@ -5,7 +5,7 @@ use tokio::time::{sleep, Duration};
 
 use crate::common::{deploy_all_registries, vm_query, GATEWAY_URL};
 
-/// Test the full "proof & reputation" flow: init_job → submit_proof → verify_job → feedback.
+/// Test the full "proof & reputation" flow: init_job → submit_proof → feedback (ERC-8004).
 #[tokio::test]
 async fn test_proof_and_reputation_flow() {
     let mut pm = ProcessManager::new();
@@ -66,41 +66,8 @@ async fn test_proof_and_reputation_flow() {
         .await;
     println!("Proof submitted");
 
-    // 5. Verify job by owner (validator)
-    interactor
-        .tx()
-        .from(&owner)
-        .to(&validation_addr)
-        .gas(10_000_000)
-        .raw_call("verify_job")
-        .argument(&job_id_buf)
-        .run()
-        .await;
-    println!("Job verified");
-
-    // 6. Verify is_job_verified view
-    let verified: u64 = vm_query(
-        &mut interactor,
-        &validation_addr,
-        "is_job_verified",
-        vec![job_id_buf.clone()],
-    )
-    .await;
-    assert!(verified > 0, "Job should be verified on-chain");
-    println!("✅ is_job_verified = {}", verified);
-
-    // 7. Authorize & submit feedback
-    interactor
-        .tx()
-        .from(&owner)
-        .to(&reputation_addr)
-        .gas(10_000_000)
-        .raw_call("authorize_feedback")
-        .argument(&job_id_buf)
-        .argument(&employer)
-        .run()
-        .await;
-    println!("Feedback authorized");
+    // ERC-8004: No verify_job or authorize_feedback needed
+    println!("ERC-8004: skipping verify_job and authorize_feedback");
 
     let rating: u64 = 85;
     interactor

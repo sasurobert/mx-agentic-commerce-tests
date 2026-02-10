@@ -155,16 +155,8 @@ async fn test_gasless_flows() {
         .await;
     println!("Proof submitted");
 
-    interactor
-        .tx()
-        .from(&owner)
-        .to(&validation_addr)
-        .gas(10_000_000)
-        .raw_call("verify_job")
-        .argument(&job_id_buf)
-        .run()
-        .await;
-    println!("✅ Job verified in gasless E2E");
+    // ERC-8004: No verify_job needed
+    println!("ERC-8004: skipping verify_job");
 
     // 7. Test facilitator's verify endpoint
     let verify_resp = client

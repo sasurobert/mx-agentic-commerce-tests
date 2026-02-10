@@ -79,50 +79,8 @@ async fn test_marketplace_hire() {
         println!("Proof submitted for: {}", job_id);
     }
 
-    // 5. Owner verifies both jobs
-    for job_id in &jobs {
-        let job_id_buf = ManagedBuffer::<StaticApi>::new_from_bytes(job_id.as_bytes());
-        interactor
-            .tx()
-            .from(&owner)
-            .to(&validation_addr)
-            .gas(10_000_000)
-            .raw_call("verify_job")
-            .argument(&job_id_buf)
-            .run()
-            .await;
-        println!("Job verified: {}", job_id);
-    }
-
-    // 6. Verify both jobs on-chain
-    for job_id in &jobs {
-        let job_id_buf = ManagedBuffer::<StaticApi>::new_from_bytes(job_id.as_bytes());
-        let verified: u64 = vm_query(
-            &mut interactor,
-            &validation_addr,
-            "is_job_verified",
-            vec![job_id_buf],
-        )
-        .await;
-        assert!(verified > 0, "Job {} should be verified", job_id);
-    }
-    println!("✅ Both marketplace jobs verified on-chain");
-
-    // 7. Agent owner authorizes feedback for both jobs
-    for job_id in &jobs {
-        let job_id_buf = ManagedBuffer::<StaticApi>::new_from_bytes(job_id.as_bytes());
-        interactor
-            .tx()
-            .from(&owner)
-            .to(&reputation_addr)
-            .gas(10_000_000)
-            .raw_call("authorize_feedback")
-            .argument(&job_id_buf)
-            .argument(&employer)
-            .run()
-            .await;
-    }
-    println!("Feedback authorized for both jobs");
+    // ERC-8004: No verify_job or authorize_feedback needed
+    println!("ERC-8004: skipping verify_job and authorize_feedback");
 
     // 8. Employer submits feedback with different ratings
     let ratings = [80u64, 95u64];

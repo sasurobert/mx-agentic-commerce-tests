@@ -62,28 +62,8 @@ async fn test_submit_feedback() {
         .run()
         .await;
 
-    // Verify (Owner)
-    interactor
-        .tx()
-        .from(&owner)
-        .to(&validation_addr)
-        .gas(10_000_000)
-        .raw_call("verify_job")
-        .argument(&job_id_buf)
-        .run()
-        .await;
-
-    // 3. Authorize Feedback (Agent Owner)
-    interactor
-        .tx()
-        .from(&owner)
-        .to(&reputation_addr)
-        .gas(10_000_000)
-        .raw_call("authorize_feedback")
-        .argument(&job_id_buf)
-        .argument(&employer)
-        .run()
-        .await;
+    // ERC-8004: No verify_job or authorize_feedback needed
+    // Employer can submit feedback directly
 
     // 4. Submit Feedback (Employer) -> Rating 80
     let rating: u64 = 80;

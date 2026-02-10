@@ -93,41 +93,8 @@ async fn test_agent_to_agent_hiring() {
         .await;
     println!("Agent B submitted proof");
 
-    // 6. Agent A (Alice) verifies the job
-    interactor
-        .tx()
-        .from(&alice)
-        .to(&validation_addr)
-        .gas(10_000_000)
-        .raw_call("verify_job")
-        .argument(&job_id_buf)
-        .run()
-        .await;
-    println!("Agent A verified the job");
-
-    // 7. Verify on-chain: job is verified
-    let verified: u64 = vm_query(
-        &mut interactor,
-        &validation_addr,
-        "is_job_verified",
-        vec![job_id_buf.clone()],
-    )
-    .await;
-    assert!(verified > 0, "Job should be verified");
-    println!("✅ Job verified on-chain");
-
-    // 8. Agent B's owner (Bob) authorizes Alice to submit feedback for Agent B
-    interactor
-        .tx()
-        .from(&bob)
-        .to(&reputation_addr)
-        .gas(10_000_000)
-        .raw_call("authorize_feedback")
-        .argument(&job_id_buf)
-        .argument(&alice) // Alice will submit feedback
-        .run()
-        .await;
-    println!("Feedback authorized (Bob authorizes Alice → Agent B)");
+    // ERC-8004: No verify_job or authorize_feedback needed
+    println!("ERC-8004: skipping verify_job and authorize_feedback");
 
     let rating: u64 = 90;
     interactor
