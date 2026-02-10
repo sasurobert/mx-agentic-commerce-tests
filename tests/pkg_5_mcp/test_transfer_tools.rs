@@ -222,6 +222,285 @@ async fn test_transfer_tools() {
     }
     assert!(token_found, "Bob should have 100 tokens");
 
+    // ===================================================================
+    // 7. Test track-transaction (use the send-egld tx hash)
+    // ===================================================================
+    println!("Testing track-transaction...");
+    // Re-send a small amount to get a fresh tx hash we can track
+    let track_args = serde_json::json!({
+        "receiver": bob_bech32,
+        "amount": "100000000000000000" // 0.1 EGLD
+    });
+    let track_resp = client.call_tool("send-egld", track_args).await;
+    let track_text = track_resp["result"]["content"][0]["text"].as_str().unwrap();
+    println!("Track: send-egld output: {}", track_text);
+
+    // Extract tx hash
+    let track_hash = track_text
+        .split("transactions/")
+        .nth(1)
+        .unwrap_or("")
+        .split_whitespace()
+        .next()
+        .unwrap_or("")
+        .trim_matches(|c: char| !c.is_alphanumeric());
+    println!("Track: extracted hash: '{}'", track_hash);
+    assert!(!track_hash.is_empty(), "Should extract a valid tx hash");
+
+    // Wait for it to finalize
+    for _ in 0..5 {
+        interactor.generate_blocks(1).await;
+        sleep(Duration::from_millis(300)).await;
+    }
+
+    // Now call track-transaction
+    let track_tx_args = serde_json::json!({ "txHash": track_hash });
+    let track_tx_resp = client.call_tool("track-transaction", track_tx_args).await;
+    if let Some(err) = track_tx_resp.get("error") {
+        panic!("track-transaction error: {:?}", err);
+    }
+    let track_tx_text = track_tx_resp["result"]["content"][0]["text"]
+        .as_str()
+        .unwrap();
+    println!("Track Transaction Output: {}", track_tx_text);
+    assert!(
+        track_tx_text.contains("success") || track_tx_text.contains("pending"),
+        "Track should show success or pending"
+    );
+
+    // ===================================================================
+    // 8. Test issue-nft-collection
+    // ===================================================================
+    println!("Testing issue-nft-collection...");
+    let nft_suffix = rand::random::<u32>() % 10000;
+    let nft_ticker = format!("NFTT{}", nft_suffix);
+    let nft_name = format!("TestNFTs{}", nft_suffix);
+
+    let issue_nft_args = serde_json::json!({
+        "tokenName": nft_name,
+        "tokenTicker": nft_ticker
+    });
+
+    let issue_nft_resp = client
+        .call_tool("issue-nft-collection", issue_nft_args)
+        .await;
+    if let Some(err) = issue_nft_resp.get("error") {
+        panic!("issue-nft-collection error: {:?}", err);
+    }
+    let issue_nft_text = issue_nft_resp["result"]["content"][0]["text"]
+        .as_str()
+        .unwrap();
+    println!("Issue NFT Collection Output: {}", issue_nft_text);
+    assert!(
+        issue_nft_text.contains("issuance sent"),
+        "Should confirm NFT collection issuance"
+    );
+
+    // Wait for NFT collection to appear
+    let mut nft_collection_id = String::new();
+    for i in 0..20 {
+        interactor.generate_blocks(1).await;
+        sleep(Duration::from_millis(500)).await;
+
+        // Check Alice's tokens for the new collection
+        let resp_roles = client_http
+            .get(format!(
+                "{}/address/{}/registered-nfts",
+                GATEWAY_URL, alice_bech32
+            ))
+            .send()
+            .await;
+        if let Ok(r) = resp_roles {
+            if let Ok(json) = r.json::<serde_json::Value>().await {
+                println!("Poll {} registered-nfts: {:?}", i, json);
+                if let Some(tokens) = json["data"]["tokens"].as_array() {
+                    if let Some(t) = tokens.iter().find(|t| {
+                        t.as_str()
+                            .map(|s| s.starts_with(&nft_ticker))
+                            .unwrap_or(false)
+                    }) {
+                        nft_collection_id = t.as_str().unwrap().to_string();
+                        break;
+                    }
+                }
+            }
+        }
+    }
+
+    if nft_collection_id.is_empty() {
+        // Fallback: Check ESDTs endpoint
+        let resp_esdt = client_http
+            .get(&format!("{}/address/{}/esdt", GATEWAY_URL, alice_bech32))
+            .send()
+            .await;
+        if let Ok(r) = resp_esdt {
+            if let Ok(json) = r.json::<serde_json::Value>().await {
+                if let Some(esdts) = json["data"]["esdts"].as_object() {
+                    for (k, _) in esdts {
+                        if k.starts_with(&nft_ticker) {
+                            // Extract collection ID (before the nonce part)
+                            let parts: Vec<&str> = k.split('-').collect();
+                            if parts.len() >= 2 {
+                                nft_collection_id = format!("{}-{}", parts[0], parts[1]);
+                            }
+                            break;
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    if nft_collection_id.is_empty() {
+        println!("WARN: Could not find NFT collection, trying to use ticker directly");
+        // On simulator, we can still try to set roles and create NFT
+        // The collection might not show up in registered-nfts API on simulator
+        // Try to find it from the issuance tx
+        let tx_hash_nft = issue_nft_text
+            .split("transactions/")
+            .nth(1)
+            .unwrap_or("")
+            .split_whitespace()
+            .next()
+            .unwrap_or("")
+            .trim_matches(|c: char| !c.is_alphanumeric());
+
+        if !tx_hash_nft.is_empty() {
+            let tx_url = format!(
+                "{}/transaction/{}?withResults=true",
+                GATEWAY_URL, tx_hash_nft
+            );
+            if let Ok(r) = client_http.get(&tx_url).send().await {
+                if let Ok(json) = r.json::<serde_json::Value>().await {
+                    // Look in SCRs for the token identifier
+                    if let Some(scrs) =
+                        json["data"]["transaction"]["smartContractResults"].as_array()
+                    {
+                        for scr in scrs {
+                            if let Some(data) = scr["data"].as_str() {
+                                // Data format: @ok@<hex_token_id>
+                                if data.starts_with("@") && data.contains("@") {
+                                    let parts: Vec<&str> = data.split('@').collect();
+                                    for part in &parts {
+                                        if !part.is_empty() && *part != "ok" && part.len() > 4 {
+                                            if let Ok(decoded) = hex::decode(part) {
+                                                if let Ok(s) = String::from_utf8(decoded) {
+                                                    if s.contains('-')
+                                                        && s.to_uppercase()
+                                                            .starts_with(&nft_ticker.to_uppercase())
+                                                    {
+                                                        nft_collection_id = s;
+                                                        println!(
+                                                            "Found collection from SCR: {}",
+                                                            nft_collection_id
+                                                        );
+                                                        break;
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    println!("NFT Collection ID: '{}'", nft_collection_id);
+    assert!(
+        !nft_collection_id.is_empty(),
+        "Should have found NFT collection ID"
+    );
+
+    // ===================================================================
+    // 9. Set ESDTRoleNFTCreate via interactor (not an MCP tool)
+    // ===================================================================
+    println!("Setting ESDTRoleNFTCreate for Alice...");
+
+    // Register Alice wallet with interactor for direct tx
+    let alice_interactor_addr = interactor.register_wallet(alice_wallet.clone()).await;
+    let system_sc = Bech32Address::from_bech32_string(
+        "erd1qqqqqqqqqqqqqqqpqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqzllls8a5w6u".to_string(),
+    );
+
+    // setSpecialRole@<token_hex>@<address_hex>@<role_hex>
+    let token_hex = hex::encode(nft_collection_id.as_bytes());
+    let addr_hex = hex::encode(alice_interactor_addr.as_bytes());
+    let role_hex = hex::encode("ESDTRoleNFTCreate".as_bytes());
+
+    let data = format!("setSpecialRole@{}@{}@{}", token_hex, addr_hex, role_hex);
+
+    interactor
+        .tx()
+        .from(&alice_interactor_addr)
+        .to(system_sc.to_address())
+        .gas(60_000_000u64)
+        .raw_call(data)
+        .run()
+        .await;
+
+    // Generate blocks to process
+    for _ in 0..5 {
+        interactor.generate_blocks(1).await;
+        sleep(Duration::from_millis(300)).await;
+    }
+    println!("ESDTRoleNFTCreate set");
+
+    // ===================================================================
+    // 10. Test create-nft
+    // ===================================================================
+    println!("Testing create-nft...");
+    let create_nft_args = serde_json::json!({
+        "collectionIdentifier": nft_collection_id,
+        "name": "TestNFT #1",
+        "royalties": 500,  // 5%
+        "quantity": "1",
+        "uris": ["https://example.com/nft1.json"]
+    });
+
+    let create_nft_resp = client.call_tool("create-nft", create_nft_args).await;
+    if let Some(err) = create_nft_resp.get("error") {
+        panic!("create-nft error: {:?}", err);
+    }
+    let create_nft_text = create_nft_resp["result"]["content"][0]["text"]
+        .as_str()
+        .unwrap();
+    println!("Create NFT Output: {}", create_nft_text);
+    assert!(
+        create_nft_text.contains("creation transaction sent"),
+        "Should confirm NFT creation"
+    );
+
+    // Verify NFT appears on Alice's account
+    let mut nft_found = false;
+    for _ in 0..15 {
+        interactor.generate_blocks(1).await;
+        sleep(Duration::from_millis(500)).await;
+
+        let resp_esdt = client_http
+            .get(format!("{}/address/{}/esdt", GATEWAY_URL, alice_bech32))
+            .send()
+            .await;
+        if let Ok(r) = resp_esdt {
+            if let Ok(json) = r.json::<serde_json::Value>().await {
+                if let Some(esdts) = json["data"]["esdts"].as_object() {
+                    // NFTs appear as COLLECTION-HEXID-NONCE
+                    if esdts.keys().any(|k| k.starts_with(&nft_collection_id)) {
+                        nft_found = true;
+                        println!("NFT found in Alice's account!");
+                        break;
+                    }
+                }
+            }
+        }
+    }
+    assert!(nft_found, "Alice should have the minted NFT");
+
+    println!("=== All MCP transfer & token lifecycle tools PASSED ===");
+
     // Cleanup
     let _ = std::fs::remove_file(temp_pem_path);
 }

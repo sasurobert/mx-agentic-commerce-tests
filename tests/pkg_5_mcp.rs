@@ -14,3 +14,6 @@ pub mod test_account_tools;
 
 #[path = "pkg_5_mcp/test_transfer_tools.rs"]
 pub mod test_transfer_tools;
+
+#[path = "pkg_5_mcp/test_registry_tools.rs"]
+pub mod test_registry_tools;

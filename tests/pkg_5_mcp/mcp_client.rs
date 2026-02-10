@@ -12,6 +12,14 @@ pub struct McpClient {
 
 impl McpClient {
     pub async fn new(chain_id: &str, pem_path: Option<&str>) -> Self {
+        Self::new_with_env(chain_id, pem_path, Vec::new()).await
+    }
+
+    pub async fn new_with_env(
+        chain_id: &str,
+        pem_path: Option<&str>,
+        extra_env: Vec<(&str, &str)>,
+    ) -> Self {
         let mcp_path = "dist/index.js";
         let working_dir = "../multiversx-mcp-server";
 
@@ -20,28 +28,16 @@ impl McpClient {
             .arg("mcp")
             .current_dir(working_dir)
             .env("MVX_API_URL", GATEWAY_URL)
-            .env("MVX_CHAIN_ID", chain_id) // networkConfig now supports this!
-            .env("MVX_PK_HEX", "") // clearing potential conflict
-            // Pass chain ID via custom prop or assume devnet defaults?
-            // Simulator uses "chain". Devnet uses "D".
-            // However, ProxyNetworkProvider usually works if URL is correct.
-            // But Transaction signing requires correct ChainID.
-            // sendEgld uses config.chainId.
-            // If config.chainId is "1" (default), validation might fail if Sim expects "chain".
-            // But we can't easily override chainId in networkConfig.ts via env.
-            // Wait, networkConfig.ts:
-            // const config = NETWORK_CONFIGS[network] || NETWORK_CONFIGS.mainnet;
-            // It selects a preset.
-            // I should modify networkConfig.ts to accept MVX_CHAIN_ID?
-            // Or use "testnet" preset if it matches "T"?
-            // Simulator chainId is "chain".
-            // Temporary fix: Set MVX_API_URL.
-            // If ChainID mismatch occurs (likely), I will need to patch networkConfig.ts or McpClient to force it.
-            // Let's see if setting API URL is enough for now.
+            .env("MVX_CHAIN_ID", chain_id)
+            .env("MVX_PK_HEX", "")
             .env("MVX_API_URL", GATEWAY_URL);
 
         if let Some(pem) = pem_path {
             cmd.env("MVX_WALLET_PEM", pem);
+        }
+
+        for (key, val) in &extra_env {
+            cmd.env(key, val);
         }
 
         let mut child = cmd
