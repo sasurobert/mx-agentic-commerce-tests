@@ -903,7 +903,7 @@ pub async fn issue_fungible_esdt_custom(
         .await;
 
     println!("Issued ESDT {}...", ticker);
-    interactor.generate_blocks(5).await;
+    interactor.generate_blocks(15).await;
 
     // Fetch token ID via HTTP API
     let issuer_bech32 = address_to_bech32(issuer);

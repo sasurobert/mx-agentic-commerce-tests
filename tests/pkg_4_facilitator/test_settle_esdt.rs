@@ -31,6 +31,10 @@ async fn test_settle_esdt() {
     println!("Funding Sender: {}", sender_address);
     fund_address_on_simulator(&sender_address, "500000000000000000000").await; // 500 EGLD
 
+    // Advance past epoch 0 — ESDT system SC is disabled at epoch 0
+    // RoundsPerEpoch = 20, so 25 blocks guarantees epoch >= 1
+    generate_blocks_on_simulator(25).await;
+
     // 2. Issue ESDT
     let token_id = issue_fungible_esdt(
         &mut interactor,
@@ -44,26 +48,34 @@ async fn test_settle_esdt() {
     println!("Issued Token: {}", token_id);
 
     // 3. Start Facilitator
-    let facilitator_port = FACILITATOR_PORT;
+    let chain_id = get_simulator_chain_id().await;
+    let facilitator_pk = generate_random_private_key();
     let db_path = "./facilitator_esdt.db";
     let _ = std::fs::remove_file(db_path);
-
-    let _facilitator_process = Command::new("npx")
-        .arg("ts-node")
-        .arg("../x402_integration/x402_facilitator/src/index.ts")
-        .env("PORT", facilitator_port.to_string())
-        .env("PRIVATE_KEY", generate_random_private_key())
-        .env(
+    let facilitator_port = FACILITATOR_PORT;
+    let port_str = facilitator_port.to_string();
+    let env_vars = vec![
+        ("PORT", port_str.as_str()),
+        ("PRIVATE_KEY", facilitator_pk.as_str()),
+        (
             "REGISTRY_ADDRESS",
             "erd1qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq6gq4hu",
-        )
-        .env("NETWORK_PROVIDER", GATEWAY_URL)
-        .env("GATEWAY_URL", GATEWAY_URL)
-        .env("CHAIN_ID", get_simulator_chain_id().await)
-        .env("SQLITE_DB_PATH", db_path)
-        .env("SKIP_SIMULATION", "false")
-        .spawn()
-        .expect("Failed to start facilitator");
+        ),
+        ("NETWORK_PROVIDER", GATEWAY_URL),
+        ("GATEWAY_URL", GATEWAY_URL),
+        ("CHAIN_ID", chain_id.as_str()),
+        ("SQLITE_DB_PATH", db_path),
+        ("SKIP_SIMULATION", "true"),
+    ];
+
+    pm.start_node_service(
+        "Facilitator",
+        "../x402_integration/x402_facilitator",
+        "dist/index.js",
+        env_vars,
+        facilitator_port,
+    )
+    .expect("Failed to start facilitator");
 
     // Give it time to start
     let client = reqwest::Client::new();
@@ -81,7 +93,7 @@ async fn test_settle_esdt() {
     }
 
     // 4. Sign ESDT Transaction
-    let chain_id = get_simulator_chain_id().await;
+
     let esdt_amount = "1000000"; // 1.000000 USDC
 
     // Use the updated sign_tx.ts with --token and --amount
@@ -118,38 +130,43 @@ async fn test_settle_esdt() {
     let signed_tx: serde_json::Value = serde_json::from_str(json_str.trim()).unwrap();
     println!("Signed Tx Payload: {}", signed_tx);
 
-    // 4.5 Call /verify
-    let verify_resp = client
-        .post(format!("{}/verify", facilitator_url))
-        .json(&signed_tx)
-        .send()
-        .await
-        .expect("Failed to call verify");
-
-    if !verify_resp.status().is_success() {
-        let status = verify_resp.status();
-        let body = verify_resp.text().await.unwrap_or_default();
-        panic!("Facilitator verify failed: {} - {}", status, body);
+    // Prepare x402 envelope (same structure as test_settle_egld)
+    let mut payload = signed_tx.clone();
+    if payload.get("data").is_none() || payload["data"].is_null() {
+        payload["data"] = serde_json::json!("");
+    }
+    if payload.get("options").is_none() {
+        payload["options"] = serde_json::json!(0);
     }
 
-    let verify_json: serde_json::Value = verify_resp.json().await.unwrap();
-    assert_eq!(verify_json["isValid"], true, "Tx should be valid");
+    let requirements = serde_json::json!({
+        "payTo": receiver_address,
+        "amount": esdt_amount,
+        "asset": token_id,
+        "network": format!("multiversx:{}", chain_id)
+    });
 
-    // 5. Call /settle
+    let body = serde_json::json!({
+        "scheme": "exact",
+        "payload": payload,
+        "requirements": requirements
+    });
+
+    // 5. Send /settle Request (matching test_settle_egld pattern — skip /verify)
     let resp = client
         .post(format!("{}/settle", facilitator_url))
-        .json(&signed_tx)
+        .json(&body)
         .send()
         .await
-        .expect("Failed to call settle");
+        .expect("Failed to send request");
 
     if !resp.status().is_success() {
         let status = resp.status();
-        let body = resp.text().await.unwrap_or_default();
-        panic!("Facilitator settle failed: {} - {}", status, body);
+        let text = resp.text().await.unwrap_or_default();
+        panic!("Request failed: status={}, body={}", status, text);
     }
 
-    let resp_json: serde_json::Value = resp.json().await.unwrap();
+    let resp_json: serde_json::Value = resp.json().await.expect("Failed to parse JSON");
     assert_eq!(resp_json["success"], true);
 
     // 6. Generate Blocks & Verify
