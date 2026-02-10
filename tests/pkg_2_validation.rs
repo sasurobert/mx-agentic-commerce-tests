@@ -7,3 +7,5 @@ mod test_errors;
 mod test_job_lifecycle;
 #[path = "pkg_2_validation/test_job_with_payment.rs"]
 mod test_job_with_payment;
+#[path = "pkg_2_validation/test_payment_errors.rs"]
+mod test_payment_errors;

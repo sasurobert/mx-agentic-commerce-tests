@@ -61,8 +61,7 @@ async fn test_error_paths() {
         .argument(&ManagedBuffer::<StaticApi>::new_from_bytes(&[0u8; 32]))
         .argument(&0u32) // metadata count
         .argument(&0u32) // services count
-        .argument(&0u32) // services count
-        .returns(ExpectError(4, ""))
+        .returns(ExpectError(4, "Token not issued"))
         .run()
         .await;
     // Can't easily check error message with current sc-snippets unless we parse the error string
@@ -80,12 +79,11 @@ async fn test_error_paths() {
         .tx()
         .from(&alice_address)
         .to(&contract_address)
+        .egld(50_000_000_000_000_000u64)
         .raw_call("issue_token")
         .argument(&ManagedBuffer::<StaticApi>::new_from_bytes(b"AgentToken2"))
         .argument(&ManagedBuffer::<StaticApi>::new_from_bytes(b"AGENT2"))
-        .egld(50_000_000_000_000_000u64)
-        .argument(&ManagedBuffer::<StaticApi>::new_from_bytes(b"AGENT2"))
-        .returns(ExpectError(4, ""))
+        .returns(ExpectError(4, "Token already issued"))
         .run()
         .await;
 
@@ -105,8 +103,7 @@ async fn test_error_paths() {
         .argument(&ManagedBuffer::<StaticApi>::new_from_bytes(&[0u8; 32]))
         .argument(&0u32) // metadata count
         .argument(&0u32) // services count
-        .argument(&0u32) // services count
-        .returns(ExpectError(4, ""))
+        .returns(ExpectError(4, "Agent already registered for this address"))
         .run()
         .await;
 
@@ -172,8 +169,10 @@ async fn test_error_paths() {
         .raw_call("set_metadata")
         .argument(&1u64) // Alice's nonce
         .argument(&0u32) // metadata count
-        .argument(&0u32) // metadata count
-        .returns(ExpectError(4, ""))
+        .returns(ExpectError(
+            4,
+            "Only the agent owner can perform this action",
+        ))
         .run()
         .await;
 

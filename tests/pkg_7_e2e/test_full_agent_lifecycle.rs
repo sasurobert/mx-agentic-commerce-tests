@@ -17,7 +17,7 @@ async fn test_full_agent_lifecycle() {
     let employer = interactor.register_wallet(test_wallets::bob()).await;
 
     // 1. Deploy Infrastructure
-    let (identity, validation_addr, reputation_addr) =
+    let (mut identity, validation_addr, reputation_addr) =
         deploy_all_registries(&mut interactor, owner.clone()).await;
 
     println!("Deployed all registries");
@@ -37,7 +37,6 @@ async fn test_full_agent_lifecycle() {
     // 3. Init Job (Validation)
     let job_id = "job-e2e-01";
     let job_id_buf = ManagedBuffer::<StaticApi>::new_from_bytes(job_id.as_bytes());
-    let agent_nonce_buf = ManagedBuffer::<StaticApi>::new_from_bytes(&agent_nonce.to_be_bytes());
 
     // Employer inits job
     interactor
@@ -47,7 +46,7 @@ async fn test_full_agent_lifecycle() {
         .gas(10_000_000)
         .raw_call("init_job")
         .argument(&job_id_buf)
-        .argument(&agent_nonce_buf)
+        .argument(&agent_nonce)
         .run()
         .await;
 
@@ -82,7 +81,6 @@ async fn test_full_agent_lifecycle() {
     println!("Job Verified");
 
     // 6. Authorize Feedback (Reputation) by Agent Owner
-    let employer_buf = ManagedBuffer::<StaticApi>::new_from_bytes(employer.as_bytes());
     interactor
         .tx()
         .from(&owner)
@@ -90,7 +88,7 @@ async fn test_full_agent_lifecycle() {
         .gas(10_000_000)
         .raw_call("authorize_feedback")
         .argument(&job_id_buf)
-        .argument(&employer_buf)
+        .argument(&employer)
         .run()
         .await;
 
@@ -98,7 +96,6 @@ async fn test_full_agent_lifecycle() {
 
     // 7. Submit Feedback (Reputation) by Employer
     let rating: u64 = 95;
-    let rating_buf = ManagedBuffer::<StaticApi>::new_from_bytes(&rating.to_be_bytes());
 
     interactor
         .tx()
@@ -107,19 +104,20 @@ async fn test_full_agent_lifecycle() {
         .gas(10_000_000)
         .raw_call("submit_feedback")
         .argument(&job_id_buf)
-        .argument(&agent_nonce_buf)
-        .argument(&rating_buf)
+        .argument(&agent_nonce)
+        .argument(&rating)
         .run()
         .await;
 
     println!("Feedback Submitted");
 
     // 8. Verify Score
+    let nonce_mb = ManagedBuffer::<StaticApi>::new_from_bytes(&agent_nonce.to_be_bytes());
     let score: u64 = crate::common::vm_query(
         &mut interactor,
         &reputation_addr,
-        "reputation_score",
-        vec![agent_nonce_buf],
+        "get_reputation_score",
+        vec![nonce_mb],
     )
     .await;
 

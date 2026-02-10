@@ -809,15 +809,41 @@ pub async fn issue_fungible_esdt(
     supply: u128,
     decimals: usize,
 ) -> String {
+    issue_fungible_esdt_custom(
+        interactor,
+        issuer,
+        name,
+        ticker,
+        supply,
+        decimals,
+        GATEWAY_URL,
+    )
+    .await
+}
+
+pub async fn issue_fungible_esdt_custom(
+    interactor: &mut Interactor,
+    issuer: &Address,
+    name: &str,
+    ticker: &str,
+    supply: u128,
+    decimals: usize,
+    gateway_url: &str,
+) -> String {
     let name_buf = ManagedBuffer::<StaticApi>::from(name.as_bytes());
     let ticker_buf = ManagedBuffer::<StaticApi>::from(ticker.as_bytes());
     let supply_big = BigUint::<StaticApi>::from(supply);
     let decimals_u32 = decimals as u32;
 
+    // ESDT system SC: erd1qqqqqqqqqqqqqqqpqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqzllls8a5w6u
+    let esdt_system_sc_bytes =
+        hex::decode("000000000000000000010000000000000000000000000000000000000002ffff").unwrap();
+    let esdt_system_sc = Address::from_slice(&esdt_system_sc_bytes);
+
     interactor
         .tx()
         .from(issuer)
-        .to(&Address::zero())
+        .to(&esdt_system_sc)
         .egld(50_000_000_000_000_000u64) // 0.05 EGLD
         .gas(60_000_000)
         .raw_call("issue")
@@ -834,7 +860,7 @@ pub async fn issue_fungible_esdt(
     // Fetch token ID via HTTP API
     let issuer_bech32 = address_to_bech32(issuer);
     let client = reqwest::Client::new();
-    let url = format!("{}/address/{}/esdt", GATEWAY_URL, issuer_bech32);
+    let url = format!("{}/address/{}/esdt", gateway_url, issuer_bech32);
 
     // Retry loop for API consistency
     for _ in 0..5 {
@@ -842,9 +868,8 @@ pub async fn issue_fungible_esdt(
         if let Ok(r) = resp {
             if let Ok(json) = r.json::<serde_json::Value>().await {
                 if let Some(tokens) = json["data"]["esdts"].as_object() {
-                    for (key, val) in tokens {
+                    for (key, _val) in tokens {
                         if key.starts_with(ticker) {
-                            // Check property 'creator' if available, or just assume correct
                             println!("Found Token: {}", key);
                             return key.clone();
                         }

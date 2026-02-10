@@ -1,6 +1,6 @@
 use crate::common::{
     create_pem_file, fund_address_on_simulator, generate_random_private_key,
-    get_simulator_chain_id, IdentityRegistryInteractor, GATEWAY_URL,
+    IdentityRegistryInteractor, GATEWAY_URL,
 };
 use identity_registry_interactor::identity_registry_proxy::IdentityRegistryProxy;
 use multiversx_sc::types::TokenIdentifier;
@@ -65,9 +65,7 @@ async fn test_token_issuance_errors() {
         .expect("Failed to start simulator"); // Port config handling? Parallel tests?
     sleep(Duration::from_secs(2)).await;
 
-    let mut interactor = Interactor::new(get_simulator_chain_id().await.as_str())
-        .await
-        .use_chain_simulator(true);
+    let mut interactor = Interactor::new(GATEWAY_URL).await.use_chain_simulator(true);
 
     // Generate Bob wallet
     let bob_private_key = generate_random_private_key();

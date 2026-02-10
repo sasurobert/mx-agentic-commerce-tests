@@ -41,10 +41,6 @@ async fn test_reputation_averaging() {
     for (i, rating) in ratings.iter().enumerate() {
         let job_id = format!("job-avg-{}", i);
         let job_id_buf = ManagedBuffer::<StaticApi>::new_from_bytes(job_id.as_bytes());
-        let agent_nonce_buf =
-            ManagedBuffer::<StaticApi>::new_from_bytes(&agent_nonce.to_be_bytes());
-        let rating_buf = ManagedBuffer::<StaticApi>::new_from_bytes(&rating.to_be_bytes());
-        let employer_buf = ManagedBuffer::<StaticApi>::new_from_bytes(employer.as_bytes());
         let zero_proof = ManagedBuffer::<StaticApi>::new_from_bytes(b"proof");
 
         // Init
@@ -55,7 +51,7 @@ async fn test_reputation_averaging() {
             .gas(10_000_000)
             .raw_call("init_job")
             .argument(&job_id_buf)
-            .argument(&agent_nonce_buf)
+            .argument(&agent_nonce)
             .run()
             .await;
         // Proof
@@ -87,7 +83,7 @@ async fn test_reputation_averaging() {
             .gas(10_000_000)
             .raw_call("authorize_feedback")
             .argument(&job_id_buf)
-            .argument(&employer_buf)
+            .argument(&employer)
             .run()
             .await;
         // Submit
@@ -98,44 +94,236 @@ async fn test_reputation_averaging() {
             .gas(10_000_000)
             .raw_call("submit_feedback")
             .argument(&job_id_buf)
-            .argument(&agent_nonce_buf)
-            .argument(&rating_buf)
+            .argument(&agent_nonce)
+            .argument(rating)
             .run()
             .await;
     }
 
     // 3. Verify Average Reputation Score
     let nonce_mb = ManagedBuffer::<StaticApi>::new_from_bytes(&agent_nonce.to_be_bytes());
-    let result: Vec<Vec<u8>> = vm_query(
+    let score: BigUint<StaticApi> = vm_query(
         &mut interactor,
         &reputation_addr,
-        "reputation_score",
+        "get_reputation_score",
         vec![nonce_mb.clone()],
     )
     .await;
 
-    let score_bytes = &result[0];
-    let mut score_val: u64 = 0;
-    for byte in score_bytes {
-        score_val = (score_val << 8) | (*byte as u64);
-    }
+    let score_val = score.to_u64().unwrap_or(0);
     println!("Final Reputation Score: {}", score_val);
 
     // Expected: (80 + 90 + 60) / 3 = 230 / 3 = 76.66 -> 76 (integer division)
     assert_eq!(score_val, 76, "Average score mismatch");
 
     // 4. Verify Total Jobs count
-    let jobs_res: Vec<Vec<u8>> = vm_query(
+    let total_jobs: u64 = vm_query(
         &mut interactor,
         &reputation_addr,
-        "total_jobs",
+        "get_total_jobs",
         vec![nonce_mb],
     )
     .await;
-    let jobs_bytes = &jobs_res[0];
-    let mut jobs_val: u64 = 0;
-    for byte in jobs_bytes {
-        jobs_val = (jobs_val << 8) | (*byte as u64);
+    assert_eq!(total_jobs, 3, "Total jobs mismatch");
+}
+
+#[tokio::test]
+async fn test_max_rating() {
+    let mut pm = ProcessManager::new();
+    pm.start_chain_simulator(8085)
+        .expect("Failed to start simulator");
+    sleep(Duration::from_secs(2)).await;
+
+    let mut interactor = Interactor::new(GATEWAY_URL).await.use_chain_simulator(true);
+    let owner = interactor.register_wallet(test_wallets::alice()).await;
+    let employer = interactor.register_wallet(test_wallets::bob()).await;
+
+    let (mut identity, validation_addr, reputation_addr) =
+        crate::common::deploy_all_registries(&mut interactor, owner.clone()).await;
+
+    identity
+        .register_agent(&mut interactor, "MaxBot", "uri", vec![])
+        .await;
+    drop(identity);
+
+    let agent_nonce: u64 = 1;
+    let job_id = "job-max";
+    let job_id_buf = ManagedBuffer::<StaticApi>::new_from_bytes(job_id.as_bytes());
+    let proof_buf = ManagedBuffer::<StaticApi>::new_from_bytes(b"proof");
+
+    // Complete job lifecycle
+    interactor
+        .tx()
+        .from(&employer)
+        .to(&validation_addr)
+        .gas(10_000_000)
+        .raw_call("init_job")
+        .argument(&job_id_buf)
+        .argument(&agent_nonce)
+        .run()
+        .await;
+    interactor
+        .tx()
+        .from(&owner)
+        .to(&validation_addr)
+        .gas(10_000_000)
+        .raw_call("submit_proof")
+        .argument(&job_id_buf)
+        .argument(&proof_buf)
+        .run()
+        .await;
+    interactor
+        .tx()
+        .from(&owner)
+        .to(&validation_addr)
+        .gas(10_000_000)
+        .raw_call("verify_job")
+        .argument(&job_id_buf)
+        .run()
+        .await;
+    interactor
+        .tx()
+        .from(&owner)
+        .to(&reputation_addr)
+        .gas(10_000_000)
+        .raw_call("authorize_feedback")
+        .argument(&job_id_buf)
+        .argument(&employer)
+        .run()
+        .await;
+
+    // Submit max rating: 100
+    interactor
+        .tx()
+        .from(&employer)
+        .to(&reputation_addr)
+        .gas(10_000_000)
+        .raw_call("submit_feedback")
+        .argument(&job_id_buf)
+        .argument(&agent_nonce)
+        .argument(&100u64)
+        .run()
+        .await;
+
+    // Verify score = 100
+    let nonce_mb = ManagedBuffer::<StaticApi>::new_from_bytes(&agent_nonce.to_be_bytes());
+    let score: BigUint<StaticApi> = vm_query(
+        &mut interactor,
+        &reputation_addr,
+        "get_reputation_score",
+        vec![nonce_mb],
+    )
+    .await;
+    assert_eq!(
+        score.to_u64().unwrap_or(0),
+        100,
+        "Max rating should give score 100"
+    );
+}
+
+#[tokio::test]
+async fn test_min_rating() {
+    let mut pm = ProcessManager::new();
+    pm.start_chain_simulator(8085)
+        .expect("Failed to start simulator");
+    sleep(Duration::from_secs(2)).await;
+
+    let mut interactor = Interactor::new(GATEWAY_URL).await.use_chain_simulator(true);
+    let owner = interactor.register_wallet(test_wallets::alice()).await;
+    let employer = interactor.register_wallet(test_wallets::bob()).await;
+
+    let (mut identity, validation_addr, reputation_addr) =
+        crate::common::deploy_all_registries(&mut interactor, owner.clone()).await;
+
+    identity
+        .register_agent(&mut interactor, "MinBot", "uri", vec![])
+        .await;
+    drop(identity);
+
+    let agent_nonce: u64 = 1;
+
+    // Two jobs: first rating = 0, second rating = 100
+    // Expected: after job-1 (rating=0): score = 0
+    //           after job-2 (rating=100): score = (0*1 + 100) / 2 = 50
+    let ratings_and_jobs = vec![(0u64, "job-min-0"), (100u64, "job-min-1")];
+
+    for (rating, job_id) in &ratings_and_jobs {
+        let job_id_buf = ManagedBuffer::<StaticApi>::new_from_bytes(job_id.as_bytes());
+        let proof_buf = ManagedBuffer::<StaticApi>::new_from_bytes(b"proof");
+
+        interactor
+            .tx()
+            .from(&employer)
+            .to(&validation_addr)
+            .gas(10_000_000)
+            .raw_call("init_job")
+            .argument(&job_id_buf)
+            .argument(&agent_nonce)
+            .run()
+            .await;
+        interactor
+            .tx()
+            .from(&owner)
+            .to(&validation_addr)
+            .gas(10_000_000)
+            .raw_call("submit_proof")
+            .argument(&job_id_buf)
+            .argument(&proof_buf)
+            .run()
+            .await;
+        interactor
+            .tx()
+            .from(&owner)
+            .to(&validation_addr)
+            .gas(10_000_000)
+            .raw_call("verify_job")
+            .argument(&job_id_buf)
+            .run()
+            .await;
+        interactor
+            .tx()
+            .from(&owner)
+            .to(&reputation_addr)
+            .gas(10_000_000)
+            .raw_call("authorize_feedback")
+            .argument(&job_id_buf)
+            .argument(&employer)
+            .run()
+            .await;
+        interactor
+            .tx()
+            .from(&employer)
+            .to(&reputation_addr)
+            .gas(10_000_000)
+            .raw_call("submit_feedback")
+            .argument(&job_id_buf)
+            .argument(&agent_nonce)
+            .argument(rating)
+            .run()
+            .await;
     }
-    assert_eq!(jobs_val, 3, "Total jobs mismatch");
+
+    // Verify score after 0 then 100 = average(0, 100) = 50
+    let nonce_mb = ManagedBuffer::<StaticApi>::new_from_bytes(&agent_nonce.to_be_bytes());
+    let score: BigUint<StaticApi> = vm_query(
+        &mut interactor,
+        &reputation_addr,
+        "get_reputation_score",
+        vec![nonce_mb.clone()],
+    )
+    .await;
+    assert_eq!(
+        score.to_u64().unwrap_or(0),
+        50,
+        "Average of 0 and 100 should be 50"
+    );
+
+    let total_jobs: u64 = vm_query(
+        &mut interactor,
+        &reputation_addr,
+        "get_total_jobs",
+        vec![nonce_mb],
+    )
+    .await;
+    assert_eq!(total_jobs, 2, "Total jobs should be 2");
 }
