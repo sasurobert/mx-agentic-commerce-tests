@@ -19,7 +19,6 @@ async fn test_identity_registry_flow() {
     sleep(Duration::from_secs(2)).await;
 
     let mut interactor = Interactor::new(GATEWAY_URL).await.use_chain_simulator(true);
-    let mut interactor = Interactor::new(GATEWAY_URL).await.use_chain_simulator(true);
 
     let wallet_alice = interactor.register_wallet(test_wallets::alice()).await;
 
@@ -74,36 +73,56 @@ async fn test_identity_registry_flow() {
 
     println!("Issued Token");
 
-    // Prepare Metadata
-    let mut metadata_entries = MultiValueEncodedCounted::new();
+    // Prepare Metadata using raw_call pattern (MultiValueEncodedCounted requires explicit count + nested encoding)
+    let name_buf = ManagedBuffer::<StaticApi>::new_from_bytes(b"MyAgent");
+    let uri_buf = ManagedBuffer::<StaticApi>::new_from_bytes(b"https://example.com/agent.json");
+    let pk_buf = ManagedBuffer::<StaticApi>::new_from_bytes(&[0u8; 32]);
+
+    // metadata count = 2
+    let metadata_count: u32 = 2;
+    let metadata_count_buf =
+        ManagedBuffer::<StaticApi>::new_from_bytes(&metadata_count.to_be_bytes());
+
+    // Entry 1: price:default = 1 EGLD
     let price: u64 = 1_000_000_000_000_000_000;
+    let mut entry1_bytes = Vec::new();
+    let key1 = b"price:default";
+    entry1_bytes.extend_from_slice(&(key1.len() as u32).to_be_bytes());
+    entry1_bytes.extend_from_slice(key1);
+    let val1 = price.to_be_bytes();
+    entry1_bytes.extend_from_slice(&(val1.len() as u32).to_be_bytes());
+    entry1_bytes.extend_from_slice(&val1);
+    let entry1_buf = ManagedBuffer::<StaticApi>::new_from_bytes(&entry1_bytes);
 
-    let entry1 = MetadataEntry {
-        key: ManagedBuffer::<StaticApi>::new_from_bytes(b"price:default"),
-        value: ManagedBuffer::<StaticApi>::new_from_bytes(&price.to_be_bytes()),
-    };
-    metadata_entries.push(entry1);
+    // Entry 2: token:default = EGLD
+    let mut entry2_bytes = Vec::new();
+    let key2 = b"token:default";
+    entry2_bytes.extend_from_slice(&(key2.len() as u32).to_be_bytes());
+    entry2_bytes.extend_from_slice(key2);
+    let val2 = b"EGLD";
+    entry2_bytes.extend_from_slice(&(val2.len() as u32).to_be_bytes());
+    entry2_bytes.extend_from_slice(val2);
+    let entry2_buf = ManagedBuffer::<StaticApi>::new_from_bytes(&entry2_bytes);
 
-    let entry2 = MetadataEntry {
-        key: ManagedBuffer::<StaticApi>::new_from_bytes(b"token:default"),
-        value: ManagedBuffer::<StaticApi>::new_from_bytes(b"EGLD"),
-    };
-    metadata_entries.push(entry2);
+    // services count = 0
+    let services_count: u32 = 0;
+    let services_count_buf =
+        ManagedBuffer::<StaticApi>::new_from_bytes(&services_count.to_be_bytes());
 
-    // Register Agent
+    // Register Agent via raw_call
     interactor
         .tx()
         .from(&wallet_alice)
         .to(&new_address)
-        .gas(60_000_000)
-        .typed(IdentityRegistryProxy)
-        .register_agent(
-            ManagedBuffer::new_from_bytes(b"MyAgent"),
-            ManagedBuffer::new_from_bytes(b"https://example.com/agent.json"),
-            ManagedBuffer::new_from_bytes(&[0u8; 32]), // dummy pk
-            metadata_entries,
-            MultiValueEncodedCounted::<StaticApi, ServiceConfigInput<StaticApi>>::new(),
-        )
+        .gas(600_000_000)
+        .raw_call("register_agent")
+        .argument(&name_buf)
+        .argument(&uri_buf)
+        .argument(&pk_buf)
+        .argument(&metadata_count_buf)
+        .argument(&entry1_buf)
+        .argument(&entry2_buf)
+        .argument(&services_count_buf)
         .run()
         .await;
 
