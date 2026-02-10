@@ -46,6 +46,8 @@ impl ProcessManager {
         let child = Command::new(&cmd_name)
             .arg("--server-port")
             .arg(port.to_string())
+            .arg("--rounds-per-epoch")
+            .arg("20")
             .arg("--skip-configs-download")
             .stdout(Stdio::inherit()) 
             .stderr(Stdio::inherit())
