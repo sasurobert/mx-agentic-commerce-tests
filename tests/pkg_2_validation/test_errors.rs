@@ -5,12 +5,12 @@ use tokio::time::{sleep, Duration};
 
 use crate::common::{
     address_to_bech32, deploy_all_registries, fund_address_on_simulator, ServiceConfigInput,
+    GATEWAY_URL,
 };
 
-const GATEWAY_PORT: u16 = 8087;
-const GATEWAY_URL: &str = "http://localhost:8087";
+const GATEWAY_PORT: u16 = 8085;
 
-async fn setup_env() -> (Interactor, Address, Address, Address) {
+async fn setup_env() -> (ProcessManager, Interactor, Address, Address, Address) {
     let mut pm = ProcessManager::new();
     pm.start_chain_simulator(GATEWAY_PORT)
         .expect("Failed to start simulator");
@@ -34,6 +34,7 @@ async fn setup_env() -> (Interactor, Address, Address, Address) {
         .await;
 
     (
+        pm,
         interactor,
         validation_addr,
         identity.address().clone(),
@@ -42,9 +43,9 @@ async fn setup_env() -> (Interactor, Address, Address, Address) {
 }
 
 #[tokio::test]
-#[should_panic(expected = "Insufficient payment amount")]
+#[should_panic(expected = "Insufficient payment")]
 async fn test_init_job_insufficient_payment() {
-    let (mut interactor, validation_addr, _, _) = setup_env().await;
+    let (_pm, mut interactor, validation_addr, _, _) = setup_env().await;
     let employer = interactor.register_wallet(test_wallets::bob()).await;
     fund_address_on_simulator(&address_to_bech32(&employer), "100000000000000000000").await;
 
@@ -63,9 +64,9 @@ async fn test_init_job_insufficient_payment() {
 }
 
 #[tokio::test]
-#[should_panic(expected = "Job ID already initialized")]
+#[should_panic(expected = "Job already initialized")]
 async fn test_init_job_duplicate_id() {
-    let (mut interactor, validation_addr, _, _) = setup_env().await;
+    let (_pm, mut interactor, validation_addr, _, _) = setup_env().await;
     let employer = interactor.register_wallet(test_wallets::bob()).await;
     fund_address_on_simulator(&address_to_bech32(&employer), "100000000000000000000").await;
 

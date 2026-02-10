@@ -16,7 +16,7 @@ async fn test_settle_esdt() {
     let _ = pm.start_chain_simulator(8085);
     sleep(Duration::from_secs(2)).await;
 
-    let mut interactor = Interactor::new(GATEWAY_URL).await;
+    let mut interactor = Interactor::new(GATEWAY_URL).await.use_chain_simulator(true);
 
     let sender_pk = generate_random_private_key();
     let sender_wallet = Wallet::from_private_key(&sender_pk).unwrap();

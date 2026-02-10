@@ -11,7 +11,7 @@ use tokio::time::{sleep, Duration};
 #[tokio::test]
 async fn test_error_paths() {
     let mut pm = ProcessManager::new();
-    pm.start_chain_simulator(8090)
+    pm.start_chain_simulator(8085)
         .expect("Failed to start simulator");
     sleep(Duration::from_secs(3)).await;
 

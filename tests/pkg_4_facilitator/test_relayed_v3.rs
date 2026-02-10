@@ -48,7 +48,7 @@ async fn test_relayed_v3_flow() {
     let _ = pm.start_chain_simulator(8085);
     sleep(Duration::from_secs(2)).await;
 
-    let mut interactor = Interactor::new(GATEWAY_URL).await;
+    let mut interactor = Interactor::new(GATEWAY_URL).await.use_chain_simulator(true);
 
     // 1. Setup Actors
     let sender_pk = generate_random_private_key();

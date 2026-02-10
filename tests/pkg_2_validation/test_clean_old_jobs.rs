@@ -9,13 +9,11 @@ use tokio::time::{sleep, Duration};
 #[tokio::test]
 async fn test_clean_old_jobs() {
     let mut pm = ProcessManager::new();
-    pm.start_chain_simulator(8097) // Port 8097
+    pm.start_chain_simulator(8085) // Port 8085
         .expect("Failed to start simulator");
     sleep(Duration::from_secs(3)).await;
 
-    let mut interactor = Interactor::new("http://localhost:8097")
-        .await
-        .use_chain_simulator(true);
+    let mut interactor = Interactor::new(GATEWAY_URL).await.use_chain_simulator(true);
 
     // Setup Owner
     let owner_private_key = generate_random_private_key();
@@ -30,7 +28,7 @@ async fn test_clean_old_jobs() {
     fund_address_on_simulator_custom(
         &owner_address.to_bech32("erd").to_string(),
         "100000000000000000000000",
-        "http://localhost:8097",
+        GATEWAY_URL,
     )
     .await;
 

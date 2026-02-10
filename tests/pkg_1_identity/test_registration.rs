@@ -77,7 +77,7 @@ async fn test_registration_with_metadata() {
         .expect("Failed to start simulator");
     sleep(Duration::from_secs(2)).await;
 
-    let mut interactor = Interactor::new(GATEWAY_URL).await;
+    let mut interactor = Interactor::new(GATEWAY_URL).await.use_chain_simulator(true);
 
     // Alice setup
     let alice_private_key = generate_random_private_key();
@@ -146,7 +146,7 @@ async fn test_registration_with_services() {
         .expect("Failed to start simulator");
     sleep(Duration::from_secs(2)).await;
 
-    let mut interactor = Interactor::new(GATEWAY_URL).await;
+    let mut interactor = Interactor::new(GATEWAY_URL).await.use_chain_simulator(true);
 
     // Alice setup
     let alice_private_key = generate_random_private_key();

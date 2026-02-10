@@ -173,8 +173,50 @@ async fn test_reputation_validation_loop() {
         .await;
     println!("Proof submitted: {}", proof);
 
-    // ── 7. ERC-8004: No verify_job or authorize_feedback needed ──
-    println!("ERC-8004: Skipping verify_job and authorize_feedback");
+    // ── 7. ERC-8004: validation_request + validation_response (replaces verify_job) ──
+    let request_hash = "req-hash-001";
+    let request_hash_buf: ManagedBuffer<StaticApi> =
+        ManagedBuffer::new_from_bytes(request_hash.as_bytes());
+    let validator_managed: ManagedAddress<StaticApi> = ManagedAddress::from_address(&wallet_alice);
+    let request_uri_buf: ManagedBuffer<StaticApi> =
+        ManagedBuffer::new_from_bytes(b"https://validator.example.com/check");
+
+    interactor
+        .tx()
+        .from(&wallet_alice)
+        .to(&validation_addr)
+        .gas(20_000_000)
+        .raw_call("validation_request")
+        .argument(&job_id_buf)
+        .argument(&validator_managed)
+        .argument(&request_uri_buf)
+        .argument(&request_hash_buf)
+        .run()
+        .await;
+    println!("Validation requested: {}", request_hash);
+
+    // validation_response: approve (1 = approved)
+    let response_uri_buf: ManagedBuffer<StaticApi> =
+        ManagedBuffer::new_from_bytes(b"https://validator.example.com/result");
+    let response_hash_buf: ManagedBuffer<StaticApi> =
+        ManagedBuffer::new_from_bytes(b"resp-hash-001");
+    let tag_buf: ManagedBuffer<StaticApi> = ManagedBuffer::new_from_bytes(b"quality-check");
+    let response_code: u8 = 1; // 1 = approved
+
+    interactor
+        .tx()
+        .from(&wallet_alice)
+        .to(&validation_addr)
+        .gas(20_000_000)
+        .raw_call("validation_response")
+        .argument(&request_hash_buf)
+        .argument(&response_code)
+        .argument(&response_uri_buf)
+        .argument(&response_hash_buf)
+        .argument(&tag_buf)
+        .run()
+        .await;
+    println!("Validation approved: {}", request_hash);
 
     // ── 8. Submit Feedback (rating = 5) ──
     let rating: u64 = 5;

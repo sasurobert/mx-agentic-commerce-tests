@@ -1,19 +1,17 @@
 use crate::common::{
     create_pem_file, fund_address_on_simulator_custom, generate_random_private_key,
-    IdentityRegistryInteractor, ServiceConfigInput, ValidationRegistryInteractor,
+    IdentityRegistryInteractor, ServiceConfigInput, ValidationRegistryInteractor, GATEWAY_URL,
 };
 use multiversx_sc::types::{BigUint, EgldOrEsdtTokenIdentifier, TokenIdentifier};
 use multiversx_sc_snippets::imports::*;
 use mx_agentic_commerce_tests::ProcessManager;
 use tokio::time::{sleep, Duration};
 
-const GATEWAY_URL: &str = "http://localhost:8090"; // Distinct port
-
 #[tokio::test]
 async fn test_job_with_payment() {
     let mut process_manager = ProcessManager::new();
     process_manager
-        .start_chain_simulator(8090)
+        .start_chain_simulator(8085)
         .expect("Failed to start simulator");
 
     sleep(Duration::from_secs(3)).await;
