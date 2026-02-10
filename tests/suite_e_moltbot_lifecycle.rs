@@ -39,7 +39,9 @@ async fn test_moltbot_lifecycle() {
     let registry_address = address_to_bech32(registry.address());
     println!("Registry Address: {}", registry_address);
 
-    registry.issue_token("Agent", "AGENT").await;
+    registry
+        .issue_token(&mut interactor, "Agent", "AGENT")
+        .await;
     generate_blocks_on_simulator(20).await;
     sleep(Duration::from_millis(500)).await;
 

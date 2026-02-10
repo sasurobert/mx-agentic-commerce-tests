@@ -69,7 +69,9 @@ async fn test_reputation_validation_loop() {
     // ── 2. Deploy Identity Registry ──
     let mut identity =
         IdentityRegistryInteractor::init(&mut interactor, wallet_alice.clone()).await;
-    identity.issue_token("AgentToken", "AGENT").await;
+    identity
+        .issue_token(&mut interactor, "AgentToken", "AGENT")
+        .await;
     let identity_addr = identity.address().clone();
     let identity_bech32 = common::address_to_bech32(&identity_addr);
     println!("Identity Registry: {}", identity_bech32);
@@ -77,6 +79,7 @@ async fn test_reputation_validation_loop() {
     // Register an agent (nonce=1)
     identity
         .register_agent(
+            &mut interactor,
             "WorkerBot",
             "https://workerbot.example.com/manifest.json",
             vec![("type", b"worker".to_vec())],

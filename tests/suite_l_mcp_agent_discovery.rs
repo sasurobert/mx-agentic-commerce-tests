@@ -115,10 +115,13 @@ async fn test_mcp_agent_discovery() {
     // Deploy and register Agent #1 (Alice)
     let mut identity =
         IdentityRegistryInteractor::init(&mut interactor, wallet_alice.clone()).await;
-    identity.issue_token("AgentToken", "AGENT").await;
+    identity
+        .issue_token(&mut interactor, "AgentToken", "AGENT")
+        .await;
 
     identity
         .register_agent(
+            &mut interactor,
             "AlphaBot",
             "data:application/json;base64,eyJuYW1lIjoiQWxwaGFCb3QifQ==",
             vec![

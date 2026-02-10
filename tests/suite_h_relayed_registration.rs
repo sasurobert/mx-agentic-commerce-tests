@@ -27,7 +27,9 @@ async fn test_relayed_registration() {
     let registry_addr = address_to_bech32(registry.address());
 
     // Issue token (required before register_agent can mint NFTs)
-    registry.issue_token("Agent", "AGENT").await;
+    registry
+        .issue_token(&mut interactor, "Agent", "AGENT")
+        .await;
 
     // Setup Relayer Wallets (Generate multiple to cover all shards)
     let project_root = std::env::current_dir().unwrap();

@@ -3,3 +3,6 @@ target/
 **/*.pem
 wallet.json
 mx-chain-simulator-go
+*.log
+*.db
+*.txt

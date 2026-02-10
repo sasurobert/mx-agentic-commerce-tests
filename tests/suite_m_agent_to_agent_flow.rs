@@ -99,7 +99,9 @@ async fn test_agent_to_agent_discovery() {
     // ── 3. Deploy Identity Registry & Register Agents ──
     let mut identity =
         IdentityRegistryInteractor::init(&mut interactor, wallet_alice.clone()).await;
-    identity.issue_token("AgentToken", "AGENT").await;
+    identity
+        .issue_token(&mut interactor, "AgentToken", "AGENT")
+        .await;
 
     let registry_address = common::address_to_bech32(identity.address());
     println!("Registry Address: {}", registry_address);
@@ -107,6 +109,7 @@ async fn test_agent_to_agent_discovery() {
     // Register Agent A (MoltBot) from Alice — nonce=1
     identity
         .register_agent(
+            &mut interactor,
             "MoltBot",
             "https://moltbot.example.com/manifest.json",
             vec![

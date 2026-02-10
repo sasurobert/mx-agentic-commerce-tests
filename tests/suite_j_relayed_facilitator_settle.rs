@@ -130,12 +130,19 @@ async fn test_relayed_facilitator_settle() {
         registry_addr = address_to_bech32(registry.address());
         println!("Registry: {}", registry_addr);
 
-        registry.issue_token("AgentNFT", "AGENTNFT").await;
+        registry
+            .issue_token(&mut interactor, "AgentNFT", "AGENTNFT")
+            .await;
         generate_blocks_on_simulator(20).await;
         sleep(Duration::from_secs(1)).await;
 
         registry
-            .register_agent("BobAgent", "https://bob.example.com", vec![])
+            .register_agent(
+                &mut interactor,
+                "BobAgent",
+                "https://bob.example.com",
+                vec![],
+            )
             .await;
     }
     // registry dropped — interactor borrow released

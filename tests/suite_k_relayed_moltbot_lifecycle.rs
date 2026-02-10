@@ -48,7 +48,9 @@ async fn test_relayed_moltbot_full_lifecycle() {
     let mut registry = IdentityRegistryInteractor::init(&mut interactor, admin.clone()).await;
     let registry_addr = address_to_bech32(registry.address());
 
-    registry.issue_token("AgentNFT", "AGENTNFT").await;
+    registry
+        .issue_token(&mut interactor, "AgentNFT", "AGENTNFT")
+        .await;
     generate_blocks_on_simulator(20).await;
     sleep(Duration::from_millis(500)).await;
 

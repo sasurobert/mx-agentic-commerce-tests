@@ -89,7 +89,9 @@ async fn test_relayed_agent_operations() {
         registry_addr_bech32 = address_to_bech32(registry.address());
         println!("Registry: {}", registry_addr_bech32);
 
-        registry.issue_token("AgentNFT", "AGENTNFT").await;
+        registry
+            .issue_token(&mut interactor, "AgentNFT", "AGENTNFT")
+            .await;
         // Generate blocks to ensure async ESDT callback completes (token ID stored)
         generate_blocks_on_simulator(20).await;
         sleep(Duration::from_secs(1)).await;

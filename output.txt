@@ -1,458 +1,259 @@
-warning: variable does not need to be mutable
-  --> tests/suite_h_relayed_registration.rs:29:9
-   |
-29 |     let mut registry = IdentityRegistryInteractor::init(&mut interactor, a...
-   |         ----^^^^^^^^
-   |         |
-   |         help: remove this `mut`
-   |
-   = note: `#[warn(unused_mut)]` (part of `#[warn(unused)]`) on by default
+   Compiling mx-agentic-commerce-tests v0.1.0 (/Users/robertsasu/RustProjects/agentic-payments/mx-agentic-commerce-tests)
+warning: unused import: `multiversx_sc_snippets::imports::*`
+ --> tests/pkg_1_identity.rs:1:5
+  |
+1 | use multiversx_sc_snippets::imports::*;
+  |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  |
+  = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
 
-warning: struct `MetadataEntry` is never constructed
-  --> tests/common/mod.rs:61:12
-   |
-61 | pub struct MetadataEntry<M: ManagedTypeApi> {
-   |            ^^^^^^^^^^^^^
-   |
-   = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+warning: unused imports: `MetadataEntry`, `ServiceConfigInput`, and `get_simulator_chain_id`
+ --> tests/pkg_1_identity/test_agent_update.rs:3:5
+  |
+3 |     get_simulator_chain_id, IdentityRegistryInteractor, MetadataEntry, ServiceConfigInput,
+  |     ^^^^^^^^^^^^^^^^^^^^^^                              ^^^^^^^^^^^^^  ^^^^^^^^^^^^^^^^^^
 
-warning: fields `interactor` and `wallet_address` are never read
-  --> tests/common/mod.rs:67:9
-   |
-66 | pub struct IdentityRegistryInteractor<'a> {
-   |            -------------------------- fields in this struct
-67 |     pub interactor: &'a mut Interactor,
-   |         ^^^^^^^^^^
-68 |     pub wallet_address: Address,
-   |         ^^^^^^^^^^^^^^
+warning: unused import: `BigUint`
+ --> tests/pkg_1_identity/test_agent_update.rs:7:28
+  |
+7 | use multiversx_sc::types::{BigUint, ManagedAddress, ManagedBuffer, TokenIdentifier};
+  |                            ^^^^^^^
 
-warning: methods `issue_token` and `register_agent` are never used
-   --> tests/common/mod.rs:98:18
+warning: unused imports: `MetadataEntry` and `get_simulator_chain_id`
+ --> tests/pkg_1_identity/test_registration.rs:3:5
+  |
+3 |     get_simulator_chain_id, IdentityRegistryInteractor, MetadataEntry, ServiceConfigInput,
+  |     ^^^^^^^^^^^^^^^^^^^^^^                              ^^^^^^^^^^^^^
+
+warning: unused import: `GATEWAY_URL`
+ --> tests/pkg_1_identity/test_error_paths.rs:3:33
+  |
+3 |     IdentityRegistryInteractor, GATEWAY_URL,
+  |                                 ^^^^^^^^^^^
+
+warning: unused import: `TokenIdentifier`
+ --> tests/pkg_1_identity/test_error_paths.rs:6:43
+  |
+6 | use multiversx_sc::types::{ManagedBuffer, TokenIdentifier};
+  |                                           ^^^^^^^^^^^^^^^
+
+warning: unused attribute
+  --> tests/pkg_1_identity.rs:19:1
+   |
+19 | #[path = "pkg_1_identity/test_views.rs"]
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ help: remove this attribute
+   |
+note: attribute also specified here
+  --> tests/pkg_1_identity.rs:18:1
+   |
+18 | #[path = "pkg_1_identity/test_service_configs.rs"]
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   = warning: this was previously accepted by the compiler but is being phased out; it will become a hard error in a future release!
+   = note: `#[warn(unused_attributes)]` (part of `#[warn(unused)]`) on by default
+
+error[E0277]: the trait bound `&multiversx_sc_snippets::imports::Wallet: TxFrom<InteractorEnvExec<'_, GatewayHttpProxy>>` is not satisfied
+  --> tests/pkg_1_identity/test_error_paths.rs:59:15
+   |
+59 |         .from(&alice_wallet)
+   |          ---- ^^^^^^^^^^^^^ the trait `TxFrom<InteractorEnvExec<'_, GatewayHttpProxy>>` is not implemented for `&multiversx_sc_snippets::imports::Wallet`
+   |          |
+   |          required by a bound introduced by this call
+   |
+   = help: the following other types implement trait `TxFrom<Env>`:
+             &Address
+             &AddressValue
+             &Bech32Address
+             &ContractInfo<P>
+             &ManagedAddress<<Env as TxEnv>::Api>
+             ()
+             Address
+             AddressValue
+           and 4 others
+note: required by a bound in `Tx::<Env, (), To, Payment, Gas, Data, RH>::from`
+  --> /Users/robertsasu/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/multiversx-sc-0.64.1/src/types/interaction/tx.rs:94:15
+   |
+92 |     pub fn from<From>(self, from: From) -> Tx<Env, From, To, Payment, Gas, Data, RH>
+   |            ---- required by a bound in this associated function
+93 |     where
+94 |         From: TxFrom<Env>,
+   |               ^^^^^^^^^^^ required by this bound in `Tx::<Env, (), To, Payment, Gas, Data, RH>::from`
+
+error[E0599]: the method `to` exists for struct `Tx<InteractorEnvExec<'_, GatewayHttpProxy>, &..., (), (), (), (), ()>`, but its trait bounds were not satisfied
+  --> tests/pkg_1_identity/test_error_paths.rs:60:10
+   |
+56 |       let err_reg = identity_interactor
+   |  ___________________-
+57 | |         .interactor
+58 | |         .tx()
+59 | |         .from(&alice_wallet)
+60 | |         .to(&contract_address)
+   | |         -^^------------------- help: remove the arguments
+   | |         ||
+   | |_________|field, not a method
+   |
+   |
+   = note: the following trait bounds were not satisfied:
+           `&multiversx_sc_snippets::imports::Wallet: TxFrom<InteractorEnvExec<'_, GatewayHttpProxy>>`
+   = note: the full name for the type has been written to '/Users/robertsasu/RustProjects/agentic-payments/mx-agentic-commerce-tests/target/debug/deps/pkg_1_identity-52ad9b420218d134.long-type-5026571365704484748.txt'
+   = note: consider using `--verbose` to print the full type name to the console
+
+error[E0277]: the trait bound `&multiversx_sc_snippets::imports::Wallet: TxFrom<InteractorEnvExec<'_, GatewayHttpProxy>>` is not satisfied
+  --> tests/pkg_1_identity/test_error_paths.rs:86:15
+   |
+86 |         .from(&alice_wallet)
+   |          ---- ^^^^^^^^^^^^^ the trait `TxFrom<InteractorEnvExec<'_, GatewayHttpProxy>>` is not implemented for `&multiversx_sc_snippets::imports::Wallet`
+   |          |
+   |          required by a bound introduced by this call
+   |
+   = help: the following other types implement trait `TxFrom<Env>`:
+             &Address
+             &AddressValue
+             &Bech32Address
+             &ContractInfo<P>
+             &ManagedAddress<<Env as TxEnv>::Api>
+             ()
+             Address
+             AddressValue
+           and 4 others
+note: required by a bound in `Tx::<Env, (), To, Payment, Gas, Data, RH>::from`
+  --> /Users/robertsasu/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/multiversx-sc-0.64.1/src/types/interaction/tx.rs:94:15
+   |
+92 |     pub fn from<From>(self, from: From) -> Tx<Env, From, To, Payment, Gas, Data, RH>
+   |            ---- required by a bound in this associated function
+93 |     where
+94 |         From: TxFrom<Env>,
+   |               ^^^^^^^^^^^ required by this bound in `Tx::<Env, (), To, Payment, Gas, Data, RH>::from`
+
+error[E0599]: the method `to` exists for struct `Tx<InteractorEnvExec<'_, GatewayHttpProxy>, &..., (), (), (), (), ()>`, but its trait bounds were not satisfied
+  --> tests/pkg_1_identity/test_error_paths.rs:87:10
+   |
+83 |       let err_issue = identity_interactor
+   |  _____________________-
+84 | |         .interactor
+85 | |         .tx()
+86 | |         .from(&alice_wallet)
+87 | |         .to(&contract_address)
+   | |         -^^------------------- help: remove the arguments
+   | |         ||
+   | |_________|field, not a method
+   |
+   |
+   = note: the following trait bounds were not satisfied:
+           `&multiversx_sc_snippets::imports::Wallet: TxFrom<InteractorEnvExec<'_, GatewayHttpProxy>>`
+   = note: the full name for the type has been written to '/Users/robertsasu/RustProjects/agentic-payments/mx-agentic-commerce-tests/target/debug/deps/pkg_1_identity-52ad9b420218d134.long-type-17533185021855335552.txt'
+   = note: consider using `--verbose` to print the full type name to the console
+
+error[E0277]: the trait bound `&multiversx_sc_snippets::imports::Wallet: TxFrom<InteractorEnvExec<'_, GatewayHttpProxy>>` is not satisfied
+   --> tests/pkg_1_identity/test_error_paths.rs:108:15
     |
- 72 | impl<'a> IdentityRegistryInteractor<'a> {
-    | --------------------------------------- methods in this implementation
-...
- 98 |     pub async fn issue_token(&mut self, name: &str, ticker: &str) {
-    |                  ^^^^^^^^^^^
-...
-117 |     pub async fn register_agent(&mut self, name: &str, uri: &str, metadat...
-    |                  ^^^^^^^^^^^^^^
+108 |         .from(&alice_wallet)
+    |          ---- ^^^^^^^^^^^^^ the trait `TxFrom<InteractorEnvExec<'_, GatewayHttpProxy>>` is not implemented for `&multiversx_sc_snippets::imports::Wallet`
+    |          |
+    |          required by a bound introduced by this call
+    |
+    = help: the following other types implement trait `TxFrom<Env>`:
+              &Address
+              &AddressValue
+              &Bech32Address
+              &ContractInfo<P>
+              &ManagedAddress<<Env as TxEnv>::Api>
+              ()
+              Address
+              AddressValue
+            and 4 others
+note: required by a bound in `Tx::<Env, (), To, Payment, Gas, Data, RH>::from`
+   --> /Users/robertsasu/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/multiversx-sc-0.64.1/src/types/interaction/tx.rs:94:15
+    |
+ 92 |     pub fn from<From>(self, from: From) -> Tx<Env, From, To, Payment, Gas, Data, RH>
+    |            ---- required by a bound in this associated function
+ 93 |     where
+ 94 |         From: TxFrom<Env>,
+    |               ^^^^^^^^^^^ required by this bound in `Tx::<Env, (), To, Payment, Gas, Data, RH>::from`
 
-warning: `mx-agentic-commerce-tests` (test "suite_h_relayed_registration") generated 4 warnings (run `cargo fix --test "suite_h_relayed_registration"` to apply 1 suggestion)
-    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.28s
-     Running tests/suite_h_relayed_registration.rs (target/debug/deps/suite_h_relayed_registration-a5667fd3cea8991f)
+error[E0599]: the method `to` exists for struct `Tx<InteractorEnvExec<'_, GatewayHttpProxy>, &..., (), (), (), (), ()>`, but its trait bounds were not satisfied
+   --> tests/pkg_1_identity/test_error_paths.rs:109:10
+    |
+105 |       let err_dup = identity_interactor
+    |  ___________________-
+106 | |         .interactor
+107 | |         .tx()
+108 | |         .from(&alice_wallet)
+109 | |         .to(&contract_address)
+    | |         -^^------------------- help: remove the arguments
+    | |         ||
+    | |_________|field, not a method
+    |
+    |
+    = note: the following trait bounds were not satisfied:
+            `&multiversx_sc_snippets::imports::Wallet: TxFrom<InteractorEnvExec<'_, GatewayHttpProxy>>`
+    = note: the full name for the type has been written to '/Users/robertsasu/RustProjects/agentic-payments/mx-agentic-commerce-tests/target/debug/deps/pkg_1_identity-52ad9b420218d134.long-type-280690948808511428.txt'
+    = note: consider using `--verbose` to print the full type name to the console
 
-running 1 test
-Starting Chain Simulator on port 8085...
-Chain Simulator started.
-[0;32mINFO [0m[2026-02-08 22:15:21.678]   using the override config files          [0;32mfiles[0m = [./config/nodeOverrideDefault.toml] 
-[0;33mWARN [0m[2026-02-08 22:15:21.678]   flag "skip-configs-download" has been provided, if the configs are missing, then simulator will not start 
-[0;33mWARN [0m[2026-02-08 22:15:21.678]   signature                                [0;33mbypass[0m = true 
-[0;32mINFO [0m[2026-02-08 22:15:21.707]   updated config value                     [0;32mfile[0m = systemSmartContractsConfig.toml [0;32mpath[0m = ESDTSystemSCConfig.BaseIssuingCost [0;32mvalue[0m = 50000000000000000 
-[0;32mINFO [0m[2026-02-08 22:15:21.707]   updated config value                     [0;32mfile[0m = config.toml [0;32mpath[0m = Debug.Process.Enabled [0;32mvalue[0m = false 
-[0;32mINFO [0m[2026-02-08 22:15:21.707]   updated config value                     [0;32mfile[0m = config.toml [0;32mpath[0m = VirtualMachine.Execution.WasmVMVersions [0;32mvalue[0m = [map[StartEpoch:0 Version:1.5]] 
-[0;32mINFO [0m[2026-02-08 22:15:21.707]   updated config value                     [0;32mfile[0m = config.toml [0;32mpath[0m = VirtualMachine.Querying.WasmVMVersions [0;32mvalue[0m = [map[StartEpoch:0 Version:1.5]] 
-[0;32mINFO [0m[2026-02-08 22:15:21.707]   updated config value                     [0;32mfile[0m = config.toml [0;32mpath[0m = WebServerAntiflood.WebServerAntifloodEnabled [0;32mvalue[0m = false 
-[0;32mINFO [0m[2026-02-08 22:15:21.707]   updated config value                     [0;32mfile[0m = config.toml [0;32mpath[0m = WebServerAntiflood.SimultaneousRequests [0;32mvalue[0m = 100000 
-[0;32mINFO [0m[2026-02-08 22:15:21.707]   updated config value                     [0;32mfile[0m = config.toml [0;32mpath[0m = WebServerAntiflood.SameSourceRequests [0;32mvalue[0m = 1000000 
-[0;32mINFO [0m[2026-02-08 22:15:21.709]   the node is running in multi-key mode, managing 4 keys! Will generate a fresh new BLS key 
-[0;32mINFO [0m[2026-02-08 22:15:21.716]   p2p private key: generated a new private key for p2p signing 
-[0;32mINFO [0m[2026-02-08 22:15:21.718]   createP2PPrivateKey: generated a new private key for p2p signing 
-[0;32mINFO [0m[2026-02-08 22:15:21.718]   starting as observer node                
-[0;32mINFO [0m[2026-02-08 22:15:21.718]   shard info                               [0;32mstarted in shard[0m = metachain 
-[0;32mINFO [0m[2026-02-08 22:15:21.719]   bootstrap parameters                     [0;32mshardId[0m = 4294967295 [0;32mepoch[0m = 0 [0;32mnumShards[0m = 3 
-[0;32mINFO [0m[2026-02-08 22:15:21.719]   new nodes config is set for epoch        [0;32mepoch[0m = 0 
-[0;33mWARN [0m[2026-02-08 22:15:21.719]   version string is not in the correct format. Hardfork trigger will lead to unpredictable results 
-[0;33mWARN [0m[2026-02-08 22:15:21.722]   processComponentsFactory.Create() node will save logs in storage because DbLookupExtensions is enabled 
-[0;32mINFO [0m[2026-02-08 22:15:21.723]   VM 1.5 created                           
-[0;32mINFO [0m[2026-02-08 22:15:21.724]   VM 1.5 created                           
-[0;32mINFO [0m[2026-02-08 22:15:21.726]   VM 1.5 created                           
-[0;32mINFO [0m[2026-02-08 22:15:21.727]   processorProxy                           [0;32mconfigured[0m = 0 
-[0;32mINFO [0m[2026-02-08 22:15:21.727]   VM 1.5 created                           
-[0;32mINFO [0m[2026-02-08 22:15:21.728]   VM 1.5 created                           
-[0;32mINFO [0m[2026-02-08 22:15:21.730]   VM 1.5 created                           
-[0;32mINFO [0m[2026-02-08 22:15:21.731]   processorProxy                           [0;32mconfigured[0m = 0 
-[0;32mINFO [0m[2026-02-08 22:15:21.732]   VM 1.5 created                           
-[0;32mINFO [0m[2026-02-08 22:15:21.733]   VM 1.5 created                           
-[0;32mINFO [0m[2026-02-08 22:15:21.735]   VM 1.5 created                           
-[0;32mINFO [0m[2026-02-08 22:15:21.736]   processorProxy                           [0;32mconfigured[0m = 0 
-[0;32mINFO [0m[2026-02-08 22:15:21.736]   processorProxy                           [0;32mconfigured[0m = 0 
-[0;32mINFO [0m[2026-02-08 22:15:21.739]   genesisBlockCreator.createHeaders        [0;32mshard[0m = 0 [0;32mnonce[0m = 0 [0;32mround[0m = 0 [0;32mroot hash[0m = 5e62f83dbb38529f5ea0e369c463dd61d3dd82fb4a0ac53bb2d8453cfc2a58f3 
-[0;32mINFO [0m[2026-02-08 22:15:21.739]   genesisBlockCreator.createHeaders        [0;32mshard[0m = 1 [0;32mnonce[0m = 0 [0;32mround[0m = 0 [0;32mroot hash[0m = 14ecf25540df3dc313f1454eabf1bb19d9e562213853d60a2f9a6eded30dc933 
-[0;32mINFO [0m[2026-02-08 22:15:21.739]   genesisBlockCreator.createHeaders        [0;32mshard[0m = 2 [0;32mnonce[0m = 0 [0;32mround[0m = 0 [0;32mroot hash[0m = dde8769f8f8ebf4acb8e0d8603cf5593f6983bae11c43a7e81affc91bca54312 
-[0;32mINFO [0m[2026-02-08 22:15:21.739]   genesisBlockCreator.createHeaders        [0;32mshard[0m = 4294967295 [0;32mnonce[0m = 0 [0;32mround[0m = 0 [0;32mroot hash[0m = 2025240140f9ce5bd6f38eb6d44728e335dcb9b467c57ac134813d85f725700b 
-[0;32mINFO [0m[2026-02-08 22:15:21.740]   processorProxy                           [0;32mconfigured[0m = 0 
-[0;32mINFO [0m[2026-02-08 22:15:21.741]   rewardsCreatorProxy                      [0;32mconfigured[0m = rewardsCreatorV1 
-[0;32mINFO [0m[2026-02-08 22:15:21.741]   indexGenesisBlocks(): historyRepo.RecordBlock [0;32mshardID[0m = 4294967295 [0;32mhash[0m = b55f287ba1a1317343b8721cb948df9254490c7fd79033c3ee100ccfe2142f18 
-[0;32mINFO [0m[2026-02-08 22:15:21.752]   the node is running in multi-key mode, managing 4 keys! Will generate a fresh new BLS key 
-[0;32mINFO [0m[2026-02-08 22:15:21.752]   p2p private key: generated a new private key for p2p signing 
-[0;32mINFO [0m[2026-02-08 22:15:21.754]   createP2PPrivateKey: generated a new private key for p2p signing 
-[0;32mINFO [0m[2026-02-08 22:15:21.754]   starting as observer node                
-[0;32mINFO [0m[2026-02-08 22:15:21.754]   shard info                               [0;32mstarted in shard[0m = 0 
-[0;32mINFO [0m[2026-02-08 22:15:21.755]   bootstrap parameters                     [0;32mshardId[0m = 0 [0;32mepoch[0m = 0 [0;32mnumShards[0m = 3 
-[0;32mINFO [0m[2026-02-08 22:15:21.760]   new nodes config is set for epoch        [0;32mepoch[0m = 0 
-[0;33mWARN [0m[2026-02-08 22:15:21.760]   version string is not in the correct format. Hardfork trigger will lead to unpredictable results 
-[0;33mWARN [0m[2026-02-08 22:15:21.764]   processComponentsFactory.Create() node will save logs in storage because DbLookupExtensions is enabled 
-[0;32mINFO [0m[2026-02-08 22:15:21.765]   VM 1.5 created                           
-[0;32mINFO [0m[2026-02-08 22:15:21.766]   VM 1.5 created                           
-[0;32mINFO [0m[2026-02-08 22:15:21.768]   VM 1.5 created                           
-[0;32mINFO [0m[2026-02-08 22:15:21.769]   processorProxy                           [0;32mconfigured[0m = 0 
-[0;32mINFO [0m[2026-02-08 22:15:21.769]   VM 1.5 created                           
-[0;32mINFO [0m[2026-02-08 22:15:21.770]   VM 1.5 created                           
-[0;32mINFO [0m[2026-02-08 22:15:21.773]   VM 1.5 created                           
-[0;32mINFO [0m[2026-02-08 22:15:21.774]   processorProxy                           [0;32mconfigured[0m = 0 
-[0;32mINFO [0m[2026-02-08 22:15:21.774]   VM 1.5 created                           
-[0;32mINFO [0m[2026-02-08 22:15:21.776]   VM 1.5 created                           
-[0;32mINFO [0m[2026-02-08 22:15:21.777]   VM 1.5 created                           
-[0;32mINFO [0m[2026-02-08 22:15:21.778]   processorProxy                           [0;32mconfigured[0m = 0 
-[0;32mINFO [0m[2026-02-08 22:15:21.779]   processorProxy                           [0;32mconfigured[0m = 0 
-[0;32mINFO [0m[2026-02-08 22:15:21.781]   genesisBlockCreator.createHeaders        [0;32mshard[0m = 0 [0;32mnonce[0m = 0 [0;32mround[0m = 0 [0;32mroot hash[0m = 5e62f83dbb38529f5ea0e369c463dd61d3dd82fb4a0ac53bb2d8453cfc2a58f3 
-[0;32mINFO [0m[2026-02-08 22:15:21.781]   genesisBlockCreator.createHeaders        [0;32mshard[0m = 1 [0;32mnonce[0m = 0 [0;32mround[0m = 0 [0;32mroot hash[0m = 14ecf25540df3dc313f1454eabf1bb19d9e562213853d60a2f9a6eded30dc933 
-[0;32mINFO [0m[2026-02-08 22:15:21.781]   genesisBlockCreator.createHeaders        [0;32mshard[0m = 2 [0;32mnonce[0m = 0 [0;32mround[0m = 0 [0;32mroot hash[0m = dde8769f8f8ebf4acb8e0d8603cf5593f6983bae11c43a7e81affc91bca54312 
-[0;32mINFO [0m[2026-02-08 22:15:21.781]   genesisBlockCreator.createHeaders        [0;32mshard[0m = 4294967295 [0;32mnonce[0m = 0 [0;32mround[0m = 0 [0;32mroot hash[0m = 2025240140f9ce5bd6f38eb6d44728e335dcb9b467c57ac134813d85f725700b 
-[0;33mWARN [0m[2026-02-08 22:15:21.782]   different delay for request block info: the epoch change trigger might not behave normally [0;33mvalue from config[0m = 1ms [0;33mexpected[0m = 3s 
-[0;32mINFO [0m[2026-02-08 22:15:21.782]   VM 1.5 created                           
-[0;32mINFO [0m[2026-02-08 22:15:21.783]   VM 1.5 created                           
-[0;32mINFO [0m[2026-02-08 22:15:21.785]   processorProxy                           [0;32mconfigured[0m = 0 
-[0;32mINFO [0m[2026-02-08 22:15:21.785]   indexGenesisBlocks(): historyRepo.RecordBlock [0;32mshardID[0m = 0 [0;32mhash[0m = 5660c4790bb607b61d93e06f2ed94178077bf90c1c86ee90e75a09a52084b16e 
-[0;32mINFO [0m[2026-02-08 22:15:21.787]   VM 1.5 created                           
-[0;32mINFO [0m[2026-02-08 22:15:21.788]   VM 1.5 created                           
-[0;32mINFO [0m[2026-02-08 22:15:21.790]   processorProxy                           [0;32mconfigured[0m = 0 
-[0;32mINFO [0m[2026-02-08 22:15:21.793]   VM 1.5 created                           
-[0;32mINFO [0m[2026-02-08 22:15:21.794]   VM 1.5 created                           
-[0;32mINFO [0m[2026-02-08 22:15:21.805]   the node is running in multi-key mode, managing 4 keys! Will generate a fresh new BLS key 
-[0;32mINFO [0m[2026-02-08 22:15:21.806]   p2p private key: generated a new private key for p2p signing 
-[0;32mINFO [0m[2026-02-08 22:15:21.807]   createP2PPrivateKey: generated a new private key for p2p signing 
-[0;32mINFO [0m[2026-02-08 22:15:21.808]   starting as observer node                
-[0;32mINFO [0m[2026-02-08 22:15:21.808]   shard info                               [0;32mstarted in shard[0m = 1 
-[0;32mINFO [0m[2026-02-08 22:15:21.808]   bootstrap parameters                     [0;32mshardId[0m = 1 [0;32mepoch[0m = 0 [0;32mnumShards[0m = 3 
-[0;32mINFO [0m[2026-02-08 22:15:21.809]   new nodes config is set for epoch        [0;32mepoch[0m = 0 
-[0;33mWARN [0m[2026-02-08 22:15:21.809]   version string is not in the correct format. Hardfork trigger will lead to unpredictable results 
-[0;33mWARN [0m[2026-02-08 22:15:21.814]   processComponentsFactory.Create() node will save logs in storage because DbLookupExtensions is enabled 
-[0;32mINFO [0m[2026-02-08 22:15:21.814]   VM 1.5 created                           
-[0;32mINFO [0m[2026-02-08 22:15:21.816]   VM 1.5 created                           
-[0;32mINFO [0m[2026-02-08 22:15:21.817]   VM 1.5 created                           
-[0;32mINFO [0m[2026-02-08 22:15:21.819]   processorProxy                           [0;32mconfigured[0m = 0 
-[0;32mINFO [0m[2026-02-08 22:15:21.819]   VM 1.5 created                           
-[0;32mINFO [0m[2026-02-08 22:15:21.820]   VM 1.5 created                           
-[0;32mINFO [0m[2026-02-08 22:15:21.823]   VM 1.5 created                           
-[0;32mINFO [0m[2026-02-08 22:15:21.824]   processorProxy                           [0;32mconfigured[0m = 0 
-[0;32mINFO [0m[2026-02-08 22:15:21.824]   VM 1.5 created                           
-[0;32mINFO [0m[2026-02-08 22:15:21.825]   VM 1.5 created                           
-[0;32mINFO [0m[2026-02-08 22:15:21.827]   VM 1.5 created                           
-[0;32mINFO [0m[2026-02-08 22:15:21.828]   processorProxy                           [0;32mconfigured[0m = 0 
-[0;32mINFO [0m[2026-02-08 22:15:21.828]   processorProxy                           [0;32mconfigured[0m = 0 
-[0;32mINFO [0m[2026-02-08 22:15:21.831]   genesisBlockCreator.createHeaders        [0;32mshard[0m = 0 [0;32mnonce[0m = 0 [0;32mround[0m = 0 [0;32mroot hash[0m = 5e62f83dbb38529f5ea0e369c463dd61d3dd82fb4a0ac53bb2d8453cfc2a58f3 
-[0;32mINFO [0m[2026-02-08 22:15:21.831]   genesisBlockCreator.createHeaders        [0;32mshard[0m = 1 [0;32mnonce[0m = 0 [0;32mround[0m = 0 [0;32mroot hash[0m = 14ecf25540df3dc313f1454eabf1bb19d9e562213853d60a2f9a6eded30dc933 
-[0;32mINFO [0m[2026-02-08 22:15:21.831]   genesisBlockCreator.createHeaders        [0;32mshard[0m = 2 [0;32mnonce[0m = 0 [0;32mround[0m = 0 [0;32mroot hash[0m = dde8769f8f8ebf4acb8e0d8603cf5593f6983bae11c43a7e81affc91bca54312 
-[0;32mINFO [0m[2026-02-08 22:15:21.831]   genesisBlockCreator.createHeaders        [0;32mshard[0m = 4294967295 [0;32mnonce[0m = 0 [0;32mround[0m = 0 [0;32mroot hash[0m = 2025240140f9ce5bd6f38eb6d44728e335dcb9b467c57ac134813d85f725700b 
-[0;33mWARN [0m[2026-02-08 22:15:21.831]   different delay for request block info: the epoch change trigger might not behave normally [0;33mvalue from config[0m = 1ms [0;33mexpected[0m = 3s 
-[0;32mINFO [0m[2026-02-08 22:15:21.832]   VM 1.5 created                           
-[0;32mINFO [0m[2026-02-08 22:15:21.833]   VM 1.5 created                           
-[0;32mINFO [0m[2026-02-08 22:15:21.835]   processorProxy                           [0;32mconfigured[0m = 0 
-[0;32mINFO [0m[2026-02-08 22:15:21.835]   indexGenesisBlocks(): historyRepo.RecordBlock [0;32mshardID[0m = 1 [0;32mhash[0m = cc85d25697eb49b5041950e897c5aed2a871cddbd8cd4a43a68ff5053b3025a7 
-[0;32mINFO [0m[2026-02-08 22:15:21.836]   VM 1.5 created                           
-[0;32mINFO [0m[2026-02-08 22:15:21.838]   VM 1.5 created                           
-[0;32mINFO [0m[2026-02-08 22:15:21.840]   processorProxy                           [0;32mconfigured[0m = 0 
-[0;32mINFO [0m[2026-02-08 22:15:21.844]   VM 1.5 created                           
-[0;32mINFO [0m[2026-02-08 22:15:21.848]   VM 1.5 created                           
-[0;32mINFO [0m[2026-02-08 22:15:21.854]   the node is running in multi-key mode, managing 4 keys! Will generate a fresh new BLS key 
-[0;32mINFO [0m[2026-02-08 22:15:21.854]   p2p private key: generated a new private key for p2p signing 
-[0;32mINFO [0m[2026-02-08 22:15:21.856]   createP2PPrivateKey: generated a new private key for p2p signing 
-[0;32mINFO [0m[2026-02-08 22:15:21.857]   starting as observer node                
-[0;32mINFO [0m[2026-02-08 22:15:21.857]   shard info                               [0;32mstarted in shard[0m = 2 
-[0;32mINFO [0m[2026-02-08 22:15:21.857]   bootstrap parameters                     [0;32mshardId[0m = 2 [0;32mepoch[0m = 0 [0;32mnumShards[0m = 3 
-[0;32mINFO [0m[2026-02-08 22:15:21.858]   new nodes config is set for epoch        [0;32mepoch[0m = 0 
-[0;33mWARN [0m[2026-02-08 22:15:21.858]   version string is not in the correct format. Hardfork trigger will lead to unpredictable results 
-[0;33mWARN [0m[2026-02-08 22:15:21.864]   processComponentsFactory.Create() node will save logs in storage because DbLookupExtensions is enabled 
-[0;32mINFO [0m[2026-02-08 22:15:21.864]   VM 1.5 created                           
-[0;32mINFO [0m[2026-02-08 22:15:21.865]   VM 1.5 created                           
-[0;32mINFO [0m[2026-02-08 22:15:21.867]   VM 1.5 created                           
-[0;32mINFO [0m[2026-02-08 22:15:21.869]   processorProxy                           [0;32mconfigured[0m = 0 
-[0;32mINFO [0m[2026-02-08 22:15:21.869]   VM 1.5 created                           
-[0;32mINFO [0m[2026-02-08 22:15:21.870]   VM 1.5 created                           
-[0;32mINFO [0m[2026-02-08 22:15:21.873]   VM 1.5 created                           
-[0;32mINFO [0m[2026-02-08 22:15:21.874]   processorProxy                           [0;32mconfigured[0m = 0 
-[0;32mINFO [0m[2026-02-08 22:15:21.874]   VM 1.5 created                           
-[0;32mINFO [0m[2026-02-08 22:15:21.875]   VM 1.5 created                           
-[0;32mINFO [0m[2026-02-08 22:15:21.877]   VM 1.5 created                           
-[0;32mINFO [0m[2026-02-08 22:15:21.878]   processorProxy                           [0;32mconfigured[0m = 0 
-[0;32mINFO [0m[2026-02-08 22:15:21.878]   processorProxy                           [0;32mconfigured[0m = 0 
-[0;32mINFO [0m[2026-02-08 22:15:21.881]   genesisBlockCreator.createHeaders        [0;32mshard[0m = 0 [0;32mnonce[0m = 0 [0;32mround[0m = 0 [0;32mroot hash[0m = 5e62f83dbb38529f5ea0e369c463dd61d3dd82fb4a0ac53bb2d8453cfc2a58f3 
-[0;32mINFO [0m[2026-02-08 22:15:21.881]   genesisBlockCreator.createHeaders        [0;32mshard[0m = 1 [0;32mnonce[0m = 0 [0;32mround[0m = 0 [0;32mroot hash[0m = 14ecf25540df3dc313f1454eabf1bb19d9e562213853d60a2f9a6eded30dc933 
-[0;32mINFO [0m[2026-02-08 22:15:21.881]   genesisBlockCreator.createHeaders        [0;32mshard[0m = 2 [0;32mnonce[0m = 0 [0;32mround[0m = 0 [0;32mroot hash[0m = dde8769f8f8ebf4acb8e0d8603cf5593f6983bae11c43a7e81affc91bca54312 
-[0;32mINFO [0m[2026-02-08 22:15:21.881]   genesisBlockCreator.createHeaders        [0;32mshard[0m = 4294967295 [0;32mnonce[0m = 0 [0;32mround[0m = 0 [0;32mroot hash[0m = 2025240140f9ce5bd6f38eb6d44728e335dcb9b467c57ac134813d85f725700b 
-[0;33mWARN [0m[2026-02-08 22:15:21.881]   different delay for request block info: the epoch change trigger might not behave normally [0;33mvalue from config[0m = 1ms [0;33mexpected[0m = 3s 
-[0;32mINFO [0m[2026-02-08 22:15:21.882]   VM 1.5 created                           
-[0;32mINFO [0m[2026-02-08 22:15:21.883]   VM 1.5 created                           
-[0;32mINFO [0m[2026-02-08 22:15:21.885]   processorProxy                           [0;32mconfigured[0m = 0 
-[0;32mINFO [0m[2026-02-08 22:15:21.885]   indexGenesisBlocks(): historyRepo.RecordBlock [0;32mshardID[0m = 2 [0;32mhash[0m = 5341f6a9a7d6d142cc508eaacda4e8198be676b4a5e9b7b24abbb1bd28537a17 
-[0;32mINFO [0m[2026-02-08 22:15:21.887]   VM 1.5 created                           
-[0;32mINFO [0m[2026-02-08 22:15:21.888]   VM 1.5 created                           
-[0;32mINFO [0m[2026-02-08 22:15:21.890]   processorProxy                           [0;32mconfigured[0m = 0 
-[0;32mINFO [0m[2026-02-08 22:15:21.892]   VM 1.5 created                           
-[0;32mINFO [0m[2026-02-08 22:15:21.894]   VM 1.5 created                           
-[0;32mINFO [0m[2026-02-08 22:15:21.897]   running the chain simulator with the following parameters [0;32mnumber of shards (including meta)[0m = 4 [0;32mround per epoch[0m = 20 [0;32mround duration[0m = 6s [0;32mgenesis timestamp[0m = 1770581721 [0;32moriginal config path[0m = ./config/node/config [0;32mtemporary path[0m = /var/folders/l1/jvz1pmxs05j_zdw3xf7skct80000gn/T/mx-chainsimulator-3919558782 
-[0;32mINFO [0m[2026-02-08 22:15:21.897]   simulators were initialized              
-[0;32mINFO [0m[2026-02-08 22:15:21.899]   processorProxy                           [0;32mconfigured[0m = 0 
-[0;32mINFO [0m[2026-02-08 22:15:21.901]   meta block has been committed successfully [0;32mepoch[0m = 0 [0;32mshard[0m = 4294967295 [0;32mround[0m = 1 [0;32mnonce[0m = 1 [0;32mhash[0m = 18a18762035e44bebc4c77cf29f4d53627fcb560bc1cb0b20c2bf05c396e8a5b 
-[0;32mINFO [0m[2026-02-08 22:15:21.918]   VM 1.5 created                           
-[0;32mINFO [0m[2026-02-08 22:15:21.919]   processorProxy                           [0;32mconfigured[0m = 0 
-[0;32mINFO [0m[2026-02-08 22:15:21.919]   VM 1.5 created                           
-[0;32mINFO [0m[2026-02-08 22:15:21.920]   processorProxy                           [0;32mconfigured[0m = 0 
-[0;32mINFO [0m[2026-02-08 22:15:21.920]   VM 1.5 created                           
-[0;32mINFO [0m[2026-02-08 22:15:21.924]   shard block has been committed successfully [0;32mepoch[0m = 0 [0;32mshard[0m = 0 [0;32mround[0m = 1 [0;32mnonce[0m = 1 [0;32mhash[0m = f1c7615cea4d0cff58d7639da53ee94dd63238bfcbc93bfd26e02e19ec9ed871 
-[0;32mINFO [0m[2026-02-08 22:15:21.936]   VM 1.5 created                           
-[0;32mINFO [0m[2026-02-08 22:15:21.937]   processorProxy                           [0;32mconfigured[0m = 0 
-[0;32mINFO [0m[2026-02-08 22:15:21.937]   VM 1.5 created                           
-[0;32mINFO [0m[2026-02-08 22:15:21.938]   processorProxy                           [0;32mconfigured[0m = 0 
-[0;32mINFO [0m[2026-02-08 22:15:21.938]   VM 1.5 created                           
-[0;32mINFO [0m[2026-02-08 22:15:21.942]   shard block has been committed successfully [0;32mepoch[0m = 0 [0;32mshard[0m = 1 [0;32mround[0m = 1 [0;32mnonce[0m = 1 [0;32mhash[0m = 223cf63d3544426a5bc4553f8043313a2b47517469ccf7baab9993b3cec8aa8b 
-[0;32mINFO [0m[2026-02-08 22:15:21.951]   VM 1.5 created                           
-[0;32mINFO [0m[2026-02-08 22:15:21.953]   processorProxy                           [0;32mconfigured[0m = 0 
-[0;32mINFO [0m[2026-02-08 22:15:21.953]   VM 1.5 created                           
-[0;32mINFO [0m[2026-02-08 22:15:21.954]   processorProxy                           [0;32mconfigured[0m = 0 
-[0;32mINFO [0m[2026-02-08 22:15:21.954]   VM 1.5 created                           
-[0;32mINFO [0m[2026-02-08 22:15:21.957]   shard block has been committed successfully [0;32mepoch[0m = 0 [0;32mshard[0m = 2 [0;32mround[0m = 1 [0;32mnonce[0m = 1 [0;32mhash[0m = 1e7b29320cc30a1bb32b5cc36039c18d5ca0d7748dc45f5a39232d6194e52b45 
-[0;33mWARN [0m[2026-02-08 22:15:21.977]   no configuration found for full history nodes. Calls to endpoints specific to full history nodes will return an error 
-[0;32mINFO [0m[2026-02-08 22:15:21.977]   faucet is enabled                        [0;32mpem file location[0m = /var/folders/l1/jvz1pmxs05j_zdw3xf7skct80000gn/T/mx-chainsimulator-3919558782/proxyConfig/walletKey.pem 
-[0;32mINFO [0m[2026-02-08 22:15:21.980]   validator statistics fetched from API    [0;32mobserver[0m = http://localhost:55914 
-[0;32mINFO [0m[2026-02-08 22:15:21.980]   economics data request                   [0;32mshard id[0m = 4294967295 [0;32mobserver[0m = http://localhost:55914 
-[0;32mINFO [0m[2026-02-08 22:15:21.980]   node status                              [0;32maddress[0m = http://localhost:55916 [0;32mshard[0m = 0 [0;32mnonce[0m = 1 [0;32mprobable highest nonce[0m = 0 [0;32mis synced[0m = true [0;32mis ready for VM Queries[0m = true [0;32mis snapshotless[0m = false [0;32mis fallback[0m = false 
-[0;32mINFO [0m[2026-02-08 22:15:21.981]   node status                              [0;32maddress[0m = http://localhost:55918 [0;32mshard[0m = 1 [0;32mnonce[0m = 1 [0;32mprobable highest nonce[0m = 0 [0;32mis synced[0m = true [0;32mis ready for VM Queries[0m = true [0;32mis snapshotless[0m = false [0;32mis fallback[0m = false 
-[0;32mINFO [0m[2026-02-08 22:15:21.982]   node status                              [0;32maddress[0m = http://localhost:55920 [0;32mshard[0m = 2 [0;32mnonce[0m = 1 [0;32mprobable highest nonce[0m = 0 [0;32mis synced[0m = true [0;32mis ready for VM Queries[0m = true [0;32mis snapshotless[0m = false [0;32mis fallback[0m = false 
-[0;32mINFO [0m[2026-02-08 22:15:21.983]   node status                              [0;32maddress[0m = http://localhost:55914 [0;32mshard[0m = 4294967295 [0;32mnonce[0m = 1 [0;32mprobable highest nonce[0m = 0 [0;32mis synced[0m = true [0;32mis ready for VM Queries[0m = true [0;32mis snapshotless[0m = false [0;32mis fallback[0m = false 
-[0;32mINFO [0m[2026-02-08 22:15:21.983]   shard 0 regular nodes                    [0;32msynced observers[0m = http://localhost:55916 [0;32msynced fallback observers[0m =  [0;32mout of sync observers[0m =  [0;32mout of sync fallback observers[0m =  
-[0;32mINFO [0m[2026-02-08 22:15:21.983]   shard 1 regular nodes                    [0;32msynced observers[0m = http://localhost:55918 [0;32msynced fallback observers[0m =  [0;32mout of sync observers[0m =  [0;32mout of sync fallback observers[0m =  
-[0;32mINFO [0m[2026-02-08 22:15:21.983]   shard 2 regular nodes                    [0;32msynced observers[0m = http://localhost:55920 [0;32msynced fallback observers[0m =  [0;32mout of sync observers[0m =  [0;32mout of sync fallback observers[0m =  
-[0;32mINFO [0m[2026-02-08 22:15:21.983]   shard 4294967295 regular nodes           [0;32msynced observers[0m = http://localhost:55914 [0;32msynced fallback observers[0m =  [0;32mout of sync observers[0m =  [0;32mout of sync fallback observers[0m =  
-[0;32mINFO [0m[2026-02-08 22:15:21.989]   chain simulator's is accessible through the URL localhost:8085 
-DEBUG: Network Config: {"data":{"config":{"erd_adaptivity":"false","erd_chain_id":"chain","erd_denomination":18,"erd_extra_gas_limit_guarded_tx":50000,"erd_extra_gas_limit_relayed_tx":50000,"erd_gas_per_data_byte":1500,"erd_gas_price_modifier":"0.01","erd_hysteresis":"0.000000","erd_latest_tag_software_version":"","erd_max_gas_per_transaction":600000000,"erd_meta_consensus_group_size":1,"erd_min_gas_limit":50000,"erd_min_gas_price":1000000000,"erd_min_transaction_version":1,"erd_num_metachain_nodes":1,"erd_num_nodes_in_shard":1,"erd_num_shards_without_meta":3,"erd_rewards_top_up_gradient_point":"2000000000000000000000000","erd_round_duration":6000,"erd_rounds_per_epoch":20,"erd_shard_consensus_group_size":1,"erd_start_time":1770575266,"erd_top_up_factor":"0.500000"}},"error":"","code":"successful"}
-sender's recalled nonce: 327
--- tx nonce: 327
-sc deploy tx hash: 42c4ae9ab0f0cd37b2e00c98211d46109063625adc9915fe6ab94b7729c50af1
-deploy address: erd1qqqqqqqqqqqqqpgqulaw80y2sp7lp8emy493mglhewhe5es8d8ssp43skd
-Deployed Identity Registry at: 00000000000000000500e7fae3bc8a807df09f3b254b1da3f7cbaf9a660769e1
-Generating Relayer Wallets...
-sender's recalled nonce: 328
--- tx nonce: 328
-transfer tx hash: 5f35746d91607b1fd49b1a4ab74b20fd1028342a918a1b8bb14a41b3dad97c8f
-Generated Relayer 0: erd1h60j2qlaw6f395tswmjrp3c06pk2q0cmgwsy9824pnjdz3tllacssfx3qn
-sender's recalled nonce: 329
--- tx nonce: 329
-transfer tx hash: 15b192f7c083529e4993bbe72ae21a3760b1b2125c6b6d27efc4e8d0a5db1d46
-Generated Relayer 1: erd1e3t777jkydervhd6npsjk4smcfqr3xq3y68d6er5upuftyndvjeq7r7x26
-sender's recalled nonce: 330
--- tx nonce: 330
-transfer tx hash: 965f8b23f51be15703611e11c07450f6a1ca924c3704f2af39a64b59961205d9
-Generated Relayer 2: erd16p3trqfyhgltj9u3fr28chcrw9qxt66jv0j2dtgad2lkglsxfdhqv99vge
-sender's recalled nonce: 331
--- tx nonce: 331
-transfer tx hash: b73cfc184a6841f3ba2216abe433de8b037bd7f6966edeb637680fc756f4b393
-Generated Relayer 3: erd1c5tp9hq8wsgp8x20q87dwz2htx3fkp52dy2yy2z9cnm7537qxjvsmarjwr
-sender's recalled nonce: 332
--- tx nonce: 332
-transfer tx hash: 86f8b422a078ba368d7c45470389d212a64b10418e261471a7da9ca7baba1cca
-Generated Relayer 4: erd1dq8m4sd65hqq637lhg3x57ua90zlt56rx5ytyjd98jkx9wlvs5fs5afufc
-sender's recalled nonce: 333
--- tx nonce: 333
-transfer tx hash: fa21b33f7b7a56ee591ff5df230d3c3311c62361369acb0fa3b9718b5c8d4a0e
-Generated Relayer 5: erd1apnlg62sx8cz7k4a6hsfnj0x74nnjrd7k3n6rklztd5txalyq95qvj945f
-sender's recalled nonce: 334
--- tx nonce: 334
-transfer tx hash: 8ae70dcee9ab4f158be811cf65018925a4822e1a5079593efd49299ae070cdc7
-Generated Relayer 6: erd1nr9f52y8prqetn0ret2g2vnn9hq9ptm82xfj3g7cxcwj6sqpgu5q9amm6m
-sender's recalled nonce: 335
--- tx nonce: 335
-transfer tx hash: 759d3ccecf064e6c66c2b3efb16426dd9f48cde743cd1953f4a22e2ea768024b
-Generated Relayer 7: erd19ftpvfmdvkuslhewwgpnq0la4fedr6hgmledj8pf9muaphyhd9nstydgcd
-sender's recalled nonce: 336
--- tx nonce: 336
-transfer tx hash: d799563d881608fd1c253c11b52792658195ee6dd3577dc6f745a2e221c2dc6f
-Generated Relayer 8: erd1nv27fvtcn5fxruaqdehgmh0e8fznsqvznjauczj5sg9evx6j27uqflnlfd
-sender's recalled nonce: 337
--- tx nonce: 337
-transfer tx hash: ead531720df7f2fbddd89e429335db632d90bf9d4ba3fa796d4ad6d89e274952
-Generated Relayer 9: erd1uu4dzvh5ascj2epjr59u096z8mtft3lygzmmhy7t0kdff22wd58qupjqke
-sender's recalled nonce: 338
--- tx nonce: 338
-transfer tx hash: f1dfa8087463e12c4e45a78558a258f1d53e7647ca9146def1495b84a9fa8a9f
-Generated Relayer 10: erd1azjnvwnk89u2y7su3cvq9ar5dck5w3p83g6y52gfdvjexln385as9d948n
-sender's recalled nonce: 339
--- tx nonce: 339
-transfer tx hash: 9f4e9369fd28af7bfb82abc9e4db87411b7c5427dca833ddcbcb4b712c157c35
-Generated Relayer 11: erd1j48ht72ajwe64sxddt40at7uyccp4tg00sr4sagh6rjpqztge4fsjxuwp8
-sender's recalled nonce: 340
--- tx nonce: 340
-transfer tx hash: 3027f6057397b831f082362bf353e673233441f88b89b5c92cacf6be27cf93b9
-Generated Relayer 12: erd1cac8arsnj3xl9y4eepsqdjf5vmdnelzap3tcy6crjuhsk6p7dersm22l3j
-sender's recalled nonce: 341
--- tx nonce: 341
-transfer tx hash: 45d470e83d3b0d49d74348f1dc0b6d8c630dd2e42024af8bc4a89a9fe24f30f0
-Generated Relayer 13: erd1qu366007ac0ra66pfhkw7z3t7gjhkkk0z2mcj5yt4965x0zfmwkqjdgexg
-sender's recalled nonce: 342
--- tx nonce: 342
-transfer tx hash: a51f280c580c6f120dcb786b8f7341f623604b817b88e0477e3fa71bebfdf8c7
-Generated Relayer 14: erd1sfcvtaelxw5zqpavfnwcyg5kxqgdvsza38gl04xmj08sepkr3d3skehlkm
-sender's recalled nonce: 343
--- tx nonce: 343
-transfer tx hash: 4f90b260499fe855889e7d11a160f1b9d792a26dbd11d1acda5913be1f95d6e6
-Generated Relayer 15: erd1c7j8etmphxfs8v5jcm6mmv3zzlpxd5cjw9nc64xr54wcu77huqtqdj8svs
-sender's recalled nonce: 344
--- tx nonce: 344
-transfer tx hash: 95ee7f0bf3147c9350af82225ae29dd05295d1752547b69a1ec060927eef1c4d
-Generated Relayer 16: erd1h8sadelx46k0xt4n5czpue27m0kgqdjm0wlp8jlg9z5nul5sfklqxdpfuv
-sender's recalled nonce: 345
--- tx nonce: 345
-transfer tx hash: 352db67cfb8c85776672d5efefaf82ad747a2ce15c4fc9a2da94a03f3f0c5337
-Generated Relayer 17: erd12yw3mhspfjem4rwkhvqtfva3f0sdm2qfkh58udr4zmkdukld2cqqlq65vj
-sender's recalled nonce: 346
--- tx nonce: 346
-transfer tx hash: 7e4a88fd68e1b5c3dc93837a5fe66f53f04d1d5b722bed6086668f250ba40c96
-Generated Relayer 18: erd1decpml7qjexx6947dy7c70uvy4p7z55s2f0ajryftx2dg6cnjnkqmscf0s
-sender's recalled nonce: 347
--- tx nonce: 347
-transfer tx hash: bb37186f6086304c4ef2271ebb2da1a0e610865d4da6b8b83eddd38a44ea5965
-Generated Relayer 19: erd1hzr2mw30eh7j7tgja8hh0z2syhu2xymd2jscgdgc0dkzr7q2xazsjh8sg9
-sender's recalled nonce: 348
--- tx nonce: 348
-transfer tx hash: f088522d35eb32fef26d0df595afa4063426649da5d34f524eb1d96e3e264fa9
-Generated Relayer 20: erd1p66a7l37f2dqyjfx7dkgmdyprjay6dfssun0ctaq99jnthkfvdhs08nk0v
-sender's recalled nonce: 349
--- tx nonce: 349
-transfer tx hash: 464e0daa69a2c69a778d163f7fae701893c64428d4aacde7aa525b1434bb02f2
-Generated Relayer 21: erd1nnjrcz3y2mln4j8pc578gn5s2rgfu3w492w2p9uuvkfqa6n925xqqk0nv2
-sender's recalled nonce: 350
--- tx nonce: 350
-transfer tx hash: 65c694f224982b48cd5038f273dd36bdddf5a4e13803464bfb4a9e8f26a4380a
-Generated Relayer 22: erd1a8lrftgduqm00utrscs97zmda3qezkzm0kcvlm2mr9cpqflwadfsrasmj7
-sender's recalled nonce: 351
--- tx nonce: 351
-transfer tx hash: 5d7645757b29a08c77168f876e09acbe9e611d1d65afc7855deeb7ab9047992a
-Generated Relayer 23: erd1rmyhcnysa4wclzt2s8zs8ls3wpdysf8kqr424e8lzhas4nclgg3qzva24m
-sender's recalled nonce: 352
--- tx nonce: 352
-transfer tx hash: d8eea3b8d9549646a70d7ca4b535c85a31dfd391d7e670644f9e80e98864c294
-Generated Relayer 24: erd1n5j7xs8hmutypxpwv8tje5hg0rfm3zpurvmzs5dp2v9dnqz63nps5wv7gv
-sender's recalled nonce: 353
--- tx nonce: 353
-transfer tx hash: deedd48189127d08ae9290c0ca75f468a1bfd0de5063ab4f55de29fcbb2a9613
-Generated Relayer 25: erd138kq66yfnk5p3a3tyu8fe85feg9vcp7wcpvkj58xtsaup29a5cvq9eywm4
-sender's recalled nonce: 354
--- tx nonce: 354
-transfer tx hash: d1e6c80926ed41a21c59832f5679d829a8a88c3fdcb2c0386f92df3b22ada116
-Generated Relayer 26: erd1nq8y2h8wuqthvkgvrk0xj9gdtmcf6znj23544h8kyly8n7csx7qsmhvm8t
-sender's recalled nonce: 355
--- tx nonce: 355
-transfer tx hash: 6ac83299331b377a7aa358f018a1a657eb8a00ba48699b905942f3a0d905d9ae
-Generated Relayer 27: erd1sfqg57sm24ug78kkkkhzzrvqlcctkncqxhsqym9vddrhl9gvvwps7lwrlv
-sender's recalled nonce: 356
--- tx nonce: 356
-transfer tx hash: 039689a7cc0b7755ec3d4640ea45d99b1fa455250df1b5f93cfabd3d9804cf90
-Generated Relayer 28: erd1gz2ln0suyssut57tzxguss7pz6fam3n9dd84mm3nws4qzmklgjcql0pm8t
-sender's recalled nonce: 357
--- tx nonce: 357
-transfer tx hash: c2ea998a328709a46d795df0d78512e4d159cd29dfa9908c7f453c5c1b17651d
-Generated Relayer 29: erd1fsz54mf99qlsqhleeaj9gux8nu56e27lh93py68frtkchupw6vuqmrwzxx
-Starting Relayer on port 3003...
-[dotenv@17.2.3] injecting env (0) from .env -- tip: ⚙️  write to custom object with { processEnv: myObject }
-Starting MultiversX OpenClaw Relayer...
-Config: {
-  "networkProvider": "http://localhost:8085",
-  "identityRegistryAddress": "erd1qqqqqqqqqqqqqpgqulaw80y2sp7lp8emy493mglhewhe5es8d8ssp43skd",
-  "reputationRegistryAddress": "",
-  "validationRegistryAddress": "",
-  "quotaLimit": 10,
-  "dbPath": ":memory:",
-  "relayerWalletsDir": "/Users/robertsasu/RustProjects/agentic-payments/mx-agentic-commerce-tests/tests/temp_relayer_wallets",
-  "port": 3003,
-  "challengeTimeout": 10,
-  "challengeDifficulty": 18,
-  "quotaResetIntervalMs": 86400000,
-  "challengeTtlSeconds": 60,
-  "relayerPemPath": "***"
-}
-We recommend providing the `clientName` when instantiating a NetworkProvider (e.g. ProxyNetworkProvider, ApiNetworkProvider). This information will be used for metrics collection and improving our services.
-Loaded relayer wallet for shard 1: erd1h60j2qlaw6f395tswmjrp3c06pk2q0cmgwsy9824pnjdz3tllacssfx3qn
-Loaded relayer wallet for shard 2: erd1e3t777jkydervhd6npsjk4smcfqr3xq3y68d6er5upuftyndvjeq7r7x26
-Loaded relayer wallet for shard 1: erd1azjnvwnk89u2y7su3cvq9ar5dck5w3p83g6y52gfdvjexln385as9d948n
-Loaded relayer wallet for shard 1: erd1j48ht72ajwe64sxddt40at7uyccp4tg00sr4sagh6rjpqztge4fsjxuwp8
-Loaded relayer wallet for shard 1: erd1cac8arsnj3xl9y4eepsqdjf5vmdnelzap3tcy6crjuhsk6p7dersm22l3j
-Loaded relayer wallet for shard 0: erd1qu366007ac0ra66pfhkw7z3t7gjhkkk0z2mcj5yt4965x0zfmwkqjdgexg
-Loaded relayer wallet for shard 1: erd1sfcvtaelxw5zqpavfnwcyg5kxqgdvsza38gl04xmj08sepkr3d3skehlkm
-Loaded relayer wallet for shard 2: erd1c7j8etmphxfs8v5jcm6mmv3zzlpxd5cjw9nc64xr54wcu77huqtqdj8svs
-Loaded relayer wallet for shard 2: erd1h8sadelx46k0xt4n5czpue27m0kgqdjm0wlp8jlg9z5nul5sfklqxdpfuv
-Loaded relayer wallet for shard 0: erd12yw3mhspfjem4rwkhvqtfva3f0sdm2qfkh58udr4zmkdukld2cqqlq65vj
-Loaded relayer wallet for shard 0: erd1decpml7qjexx6947dy7c70uvy4p7z55s2f0ajryftx2dg6cnjnkqmscf0s
-Loaded relayer wallet for shard 1: erd1hzr2mw30eh7j7tgja8hh0z2syhu2xymd2jscgdgc0dkzr7q2xazsjh8sg9
-Loaded relayer wallet for shard 2: erd16p3trqfyhgltj9u3fr28chcrw9qxt66jv0j2dtgad2lkglsxfdhqv99vge
-Loaded relayer wallet for shard 1: erd1p66a7l37f2dqyjfx7dkgmdyprjay6dfssun0ctaq99jnthkfvdhs08nk0v
-Loaded relayer wallet for shard 0: erd1nnjrcz3y2mln4j8pc578gn5s2rgfu3w492w2p9uuvkfqa6n925xqqk0nv2
-Loaded relayer wallet for shard 1: erd1a8lrftgduqm00utrscs97zmda3qezkzm0kcvlm2mr9cpqflwadfsrasmj7
-Loaded relayer wallet for shard 2: erd1rmyhcnysa4wclzt2s8zs8ls3wpdysf8kqr424e8lzhas4nclgg3qzva24m
-Loaded relayer wallet for shard 1: erd1n5j7xs8hmutypxpwv8tje5hg0rfm3zpurvmzs5dp2v9dnqz63nps5wv7gv
-Loaded relayer wallet for shard 0: erd138kq66yfnk5p3a3tyu8fe85feg9vcp7wcpvkj58xtsaup29a5cvq9eywm4
-Loaded relayer wallet for shard 1: erd1nq8y2h8wuqthvkgvrk0xj9gdtmcf6znj23544h8kyly8n7csx7qsmhvm8t
-Loaded relayer wallet for shard 1: erd1sfqg57sm24ug78kkkkhzzrvqlcctkncqxhsqym9vddrhl9gvvwps7lwrlv
-Loaded relayer wallet for shard 0: erd1gz2ln0suyssut57tzxguss7pz6fam3n9dd84mm3nws4qzmklgjcql0pm8t
-Loaded relayer wallet for shard 0: erd1fsz54mf99qlsqhleeaj9gux8nu56e27lh93py68frtkchupw6vuqmrwzxx
-Loaded relayer wallet for shard 1: erd1c5tp9hq8wsgp8x20q87dwz2htx3fkp52dy2yy2z9cnm7537qxjvsmarjwr
-Loaded relayer wallet for shard 1: erd1dq8m4sd65hqq637lhg3x57ua90zlt56rx5ytyjd98jkx9wlvs5fs5afufc
-Loaded relayer wallet for shard 0: erd1apnlg62sx8cz7k4a6hsfnj0x74nnjrd7k3n6rklztd5txalyq95qvj945f
-Loaded relayer wallet for shard 0: erd1nr9f52y8prqetn0ret2g2vnn9hq9ptm82xfj3g7cxcwj6sqpgu5q9amm6m
-Loaded relayer wallet for shard 1: erd19ftpvfmdvkuslhewwgpnq0la4fedr6hgmledj8pf9muaphyhd9nstydgcd
-Loaded relayer wallet for shard 0: erd1nv27fvtcn5fxruaqdehgmh0e8fznsqvznjauczj5sg9evx6j27uqflnlfd
-Loaded relayer wallet for shard 2: erd1uu4dzvh5ascj2epjr59u096z8mtft3lygzmmhy7t0kdff22wd58qupjqke
-We recommend providing the `clientName` when instantiating a NetworkProvider (e.g. ProxyNetworkProvider, ApiNetworkProvider). This information will be used for metrics collection and improving our services.
-We recommend providing the `clientName` when instantiating a NetworkProvider (e.g. ProxyNetworkProvider, ApiNetworkProvider). This information will be used for metrics collection and improving our services.
-Server listening on port 3003
-Relayer started.
-Moltbot Address (Unfunded): erd1xzuqc9yj7hx44z6w4ykfe9r5e7qvqdypxlks90jdnep6hs2c4q2q475fxz
-Running Moltbot Registration with Relayer...
-Relay: Processing transaction from erd1xzuqc9yj7hx44z6w4ykfe9r5e7qvqdypxlks90jdnep6hs2c4q2q475fxz
-Relay: Step 1 - Checking Authorization
-Authorization: No registries or ABI configured, failing open.
-Relay: Agent is registered on-chain.
-Relay: Step 4 - Running On-Chain Simulation
-Relay: Simulation SKIPPED by config.
-Relay: Step 5 - Broadcasting Transaction
-Relay: Broadcast failed: Request error on url [transaction/send]: [transaction generation failed: invalid chain ID]
-Relay error: Error: Broadcast failed: Request error on url [transaction/send]: [transaction generation failed: invalid chain ID]
-    at RelayerService.signAndRelay (/Users/robertsasu/RustProjects/agentic-payments/x402_integration/multiversx-openclaw-relayer/dist/src/services/RelayerService.js:162:19)
-    at process.processTicksAndRejections (node:internal/process/task_queues:103:5)
-    at async /Users/robertsasu/RustProjects/agentic-payments/x402_integration/multiversx-openclaw-relayer/dist/src/api/server.js:88:28
-Script Stdout: 
-> moltbot-starter-kit@1.0.0 register
-> ts-node scripts/register.ts
+error[E0277]: the trait bound `&multiversx_sc_snippets::imports::Wallet: TxFrom<InteractorEnvExec<'_, GatewayHttpProxy>>` is not satisfied
+   --> tests/pkg_1_identity/test_error_paths.rs:181:15
+    |
+181 |         .from(&bob_wallet)
+    |          ---- ^^^^^^^^^^^ the trait `TxFrom<InteractorEnvExec<'_, GatewayHttpProxy>>` is not implemented for `&multiversx_sc_snippets::imports::Wallet`
+    |          |
+    |          required by a bound introduced by this call
+    |
+    = help: the following other types implement trait `TxFrom<Env>`:
+              &Address
+              &AddressValue
+              &Bech32Address
+              &ContractInfo<P>
+              &ManagedAddress<<Env as TxEnv>::Api>
+              ()
+              Address
+              AddressValue
+            and 4 others
+note: required by a bound in `Tx::<Env, (), To, Payment, Gas, Data, RH>::from`
+   --> /Users/robertsasu/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/multiversx-sc-0.64.1/src/types/interaction/tx.rs:94:15
+    |
+ 92 |     pub fn from<From>(self, from: From) -> Tx<Env, From, To, Payment, Gas, Data, RH>
+    |            ---- required by a bound in this associated function
+ 93 |     where
+ 94 |         From: TxFrom<Env>,
+    |               ^^^^^^^^^^^ required by this bound in `Tx::<Env, (), To, Payment, Gas, Data, RH>::from`
 
-🚀 Starting Agent Registration...
-We recommend providing the `clientName` when instantiating a NetworkProvider (e.g. ProxyNetworkProvider, ApiNetworkProvider). This information will be used for metrics collection and improving our services.
-Using Provider: ProxyNetworkProvider (http://localhost:8085)
-Registering Agent: MoltBot-1...
-Name: MoltBot-1
-URI: https://agent.molt.bot/MoltBot-1
-Public Key: 30b80c1492f5cd5a...
-Metadata: 2 entries
-Empty wallet detected. Using Relayer fallback...
-Fetching Relayer Address for Shard...
-Relayer Address cached: erd1nv27fvtcn5fxruaqdehgmh0e8fznsqvznjauczj5sg9evx6j27uqflnlfd
-🧩 Solving PoW Challenge (Difficulty: 18 bits)...
-✅ Challenge Solved in 1.31s! Nonce: 975128
-Broadcasting via Relayer...
+error[E0599]: the method `to` exists for struct `Tx<InteractorEnvExec<'_, GatewayHttpProxy>, &..., (), (), (), (), ()>`, but its trait bounds were not satisfied
+   --> tests/pkg_1_identity/test_error_paths.rs:182:10
+    |
+178 |       let err_meta = identity_interactor
+    |  ____________________-
+179 | |         .interactor
+180 | |         .tx()
+181 | |         .from(&bob_wallet)
+182 | |         .to(&contract_address)
+    | |         -^^------------------- help: remove the arguments
+    | |         ||
+    | |_________|field, not a method
+    |
+    |
+    = note: the following trait bounds were not satisfied:
+            `&multiversx_sc_snippets::imports::Wallet: TxFrom<InteractorEnvExec<'_, GatewayHttpProxy>>`
+    = note: the full name for the type has been written to '/Users/robertsasu/RustProjects/agentic-payments/mx-agentic-commerce-tests/target/debug/deps/pkg_1_identity-52ad9b420218d134.long-type-15697799880121901902.txt'
+    = note: consider using `--verbose` to print the full type name to the console
 
-Script Stderr: Relaying failed: Broadcast failed: Request error on url [transaction/send]: [transaction generation failed: invalid chain ID]
+warning: unused variable: `bob_interactor`
+   --> tests/pkg_1_identity/test_service_configs.rs:124:13
+    |
+124 |     let mut bob_interactor = IdentityRegistryInteractor {
+    |             ^^^^^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_bob_interactor`
+    |
+    = note: `#[warn(unused_variables)]` (part of `#[warn(unused)]`) on by default
 
+warning: variable does not need to be mutable
+   --> tests/pkg_1_identity/test_service_configs.rs:124:9
+    |
+124 |     let mut bob_interactor = IdentityRegistryInteractor {
+    |         ----^^^^^^^^^^^^^^
+    |         |
+    |         help: remove this `mut`
+    |
+    = note: `#[warn(unused_mut)]` (part of `#[warn(unused)]`) on by default
 
-thread 'test_relayed_registration' (2717974) panicked at tests/suite_h_relayed_registration.rs:108:5:
-Registration script failed
-note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
-test test_relayed_registration ... FAILED
-
-failures:
-
-failures:
-    test_relayed_registration
-
-test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 10.14s
-
-error: test failed, to rerun pass `--test suite_h_relayed_registration`
+Some errors have detailed explanations: E0277, E0599.
+For more information about an error, try `rustc --explain E0277`.
+warning: `mx-agentic-commerce-tests` (test "pkg_1_identity") generated 9 warnings
+error: could not compile `mx-agentic-commerce-tests` (test "pkg_1_identity") due to 8 previous errors; 9 warnings emitted
