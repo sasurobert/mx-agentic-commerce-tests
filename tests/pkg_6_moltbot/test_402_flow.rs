@@ -3,42 +3,43 @@ use multiversx_sc_snippets::imports::*;
 use mx_agentic_commerce_tests::ProcessManager;
 use tokio::time::{sleep, Duration};
 
-use crate::common::{deploy_all_registries, GATEWAY_URL};
+use crate::common::{deploy_all_registries, vm_query, GATEWAY_URL};
 
+/// Test the full "proof & reputation" flow: init_job → submit_proof → verify_job → feedback.
 #[tokio::test]
-async fn test_full_agent_lifecycle() {
+async fn test_proof_and_reputation_flow() {
     let mut pm = ProcessManager::new();
     pm.start_chain_simulator(8085)
         .expect("Failed to start simulator");
     sleep(Duration::from_secs(2)).await;
 
     let mut interactor = Interactor::new(GATEWAY_URL).await.use_chain_simulator(true);
+    interactor.generate_blocks_until_all_activations().await;
+
     let owner = interactor.register_wallet(test_wallets::alice()).await;
     let employer = interactor.register_wallet(test_wallets::bob()).await;
 
-    // 1. Deploy Infrastructure
+    // 1. Deploy all registries
     let (identity, validation_addr, reputation_addr) =
         deploy_all_registries(&mut interactor, owner.clone()).await;
+    println!("Registries deployed");
 
-    println!("Deployed all registries");
-
-    // 2. Register Agent
+    // 2. Register agent (owner)
     identity
         .register_agent(
             &mut interactor,
-            "FullLifecycleBot",
-            "https://bot.io",
+            "ProofTestBot",
+            "https://example.com/proofbot",
             vec![],
         )
         .await;
-
     let agent_nonce: u64 = 1;
+    println!("Agent registered (nonce={})", agent_nonce);
 
-    // 3. Init Job (Validation)
-    let job_id = "job-e2e-01";
+    // 3. Init job by employer
+    let job_id = "job-moltbot-402";
     let job_id_buf = ManagedBuffer::<StaticApi>::new_from_bytes(job_id.as_bytes());
 
-    // Employer inits job
     interactor
         .tx()
         .from(&employer)
@@ -49,11 +50,10 @@ async fn test_full_agent_lifecycle() {
         .argument(&agent_nonce)
         .run()
         .await;
+    println!("Job initialized: {}", job_id);
 
-    println!("Job Initialized");
-
-    // 4. Submit Proof (Validation) by Agent Owner
-    let proof = ManagedBuffer::<StaticApi>::new_from_bytes(b"e2e-proof");
+    // 4. Submit proof by agent owner
+    let proof = ManagedBuffer::<StaticApi>::new_from_bytes(b"moltbot-proof-hash-001");
     interactor
         .tx()
         .from(&owner)
@@ -64,10 +64,9 @@ async fn test_full_agent_lifecycle() {
         .argument(&proof)
         .run()
         .await;
+    println!("Proof submitted");
 
-    println!("Proof Submitted");
-
-    // 5. Verify Job (Validation) by Validator (Owner for now)
+    // 5. Verify job by owner (validator)
     interactor
         .tx()
         .from(&owner)
@@ -77,10 +76,20 @@ async fn test_full_agent_lifecycle() {
         .argument(&job_id_buf)
         .run()
         .await;
+    println!("Job verified");
 
-    println!("Job Verified");
+    // 6. Verify is_job_verified view
+    let verified: u64 = vm_query(
+        &mut interactor,
+        &validation_addr,
+        "is_job_verified",
+        vec![job_id_buf.clone()],
+    )
+    .await;
+    assert!(verified > 0, "Job should be verified on-chain");
+    println!("✅ is_job_verified = {}", verified);
 
-    // 6. Authorize Feedback (Reputation) by Agent Owner
+    // 7. Authorize & submit feedback
     interactor
         .tx()
         .from(&owner)
@@ -91,12 +100,9 @@ async fn test_full_agent_lifecycle() {
         .argument(&employer)
         .run()
         .await;
+    println!("Feedback authorized");
 
-    println!("Feedback Authorized");
-
-    // 7. Submit Feedback (Reputation) by Employer
-    let rating: u64 = 95;
-
+    let rating: u64 = 85;
     interactor
         .tx()
         .from(&employer)
@@ -108,22 +114,21 @@ async fn test_full_agent_lifecycle() {
         .argument(&rating)
         .run()
         .await;
+    println!("Feedback submitted (rating={})", rating);
 
-    println!("Feedback Submitted");
-
-    // 8. Verify Score
-    let nonce_mb = ManagedBuffer::<StaticApi>::new_from_bytes(&agent_nonce.to_be_bytes());
-    let score: u64 = crate::common::vm_query(
+    // 8. Verify reputation
+    let nonce_buf = ManagedBuffer::<StaticApi>::new_from_bytes(&agent_nonce.to_be_bytes());
+    let score: u64 = vm_query(
         &mut interactor,
         &reputation_addr,
         "get_reputation_score",
-        vec![nonce_mb],
+        vec![nonce_buf],
     )
     .await;
 
-    println!("Reputation Score: {}", score);
-    assert!(score > 0, "Score should be positive");
-    assert_eq!(score, 95, "Score should be 95 (first feedback)"); // 95 is what we submitted
+    assert!(score > 0, "Reputation should be positive after feedback");
+    assert_eq!(score, rating, "First feedback = exact score");
+    println!("✅ Reputation score = {} (expected {})", score, rating);
 
-    println!("Full E2E Lifecycle Complete");
+    println!("=== Proof & Reputation Flow Complete ===");
 }

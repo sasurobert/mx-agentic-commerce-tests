@@ -738,7 +738,7 @@ pub async fn deploy_all_registries(
     owner: Address,
 ) -> (IdentityRegistryInteractor, Address, Address) {
     // 1. Deploy Identity
-    let mut identity = IdentityRegistryInteractor::init(interactor, owner.clone()).await;
+    let identity = IdentityRegistryInteractor::init(interactor, owner.clone()).await;
     identity
         .issue_token(interactor, "AgentToken", "AGENT")
         .await;
