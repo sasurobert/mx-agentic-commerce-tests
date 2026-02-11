@@ -1423,6 +1423,7 @@ dependencies = [
  "base64 0.21.7",
  "bech32",
  "common",
+ "futures",
  "hex",
  "identity-registry-interactor",
  "multiversx-sc",
