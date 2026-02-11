@@ -310,7 +310,8 @@ async fn test_mcp_tool_coverage() {
         "submit-agent-feedback",
         "is-job-verified",
         "submit-job-proof",
-        "verify-job",
+        "validation-request",
+        "validation-response",
         "create-purchase-transaction",
     ];
 
