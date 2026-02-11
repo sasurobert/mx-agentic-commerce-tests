@@ -66,8 +66,6 @@ async fn test_proof_and_reputation_flow() {
         .await;
     println!("Proof submitted");
 
-    // ERC-8004: No verify_job or authorize_feedback needed
-    println!("ERC-8004: skipping verify_job and authorize_feedback");
 
     let rating: u64 = 85;
     interactor
@@ -75,7 +73,7 @@ async fn test_proof_and_reputation_flow() {
         .from(&employer)
         .to(&reputation_addr)
         .gas(10_000_000)
-        .raw_call("submit_feedback")
+        .raw_call("giveFeedbackSimple")
         .argument(&job_id_buf)
         .argument(&agent_nonce)
         .argument(&rating)

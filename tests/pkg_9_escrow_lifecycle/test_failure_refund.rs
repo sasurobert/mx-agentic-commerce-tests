@@ -117,7 +117,7 @@ async fn test_failure_refund_lifecycle() {
         .from(&employer)
         .to(&reputation_addr)
         .gas(10_000_000)
-        .raw_call("submit_feedback")
+        .raw_call("giveFeedbackSimple")
         .argument(&job_id_buf)
         .argument(&agent_nonce)
         .argument(&rating)

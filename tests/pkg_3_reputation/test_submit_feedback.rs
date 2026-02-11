@@ -62,7 +62,6 @@ async fn test_submit_feedback() {
         .run()
         .await;
 
-    // ERC-8004: No verify_job or authorize_feedback needed
     // Employer can submit feedback directly
 
     // 4. Submit Feedback (Employer) -> Rating 80
@@ -73,7 +72,7 @@ async fn test_submit_feedback() {
         .from(&employer)
         .to(&reputation_addr)
         .gas(10_000_000)
-        .raw_call("submit_feedback")
+        .raw_call("giveFeedbackSimple")
         .argument(&job_id_buf)
         .argument(&agent_nonce)
         .argument(&rating)

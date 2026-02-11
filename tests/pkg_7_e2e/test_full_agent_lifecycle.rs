@@ -67,8 +67,6 @@ async fn test_full_agent_lifecycle() {
 
     println!("Proof Submitted");
 
-    // ERC-8004: No verify_job or authorize_feedback needed
-    println!("ERC-8004: skipping verify_job and authorize_feedback");
 
     // 7. Submit Feedback (Reputation) by Employer
     let rating: u64 = 95;
@@ -78,7 +76,7 @@ async fn test_full_agent_lifecycle() {
         .from(&employer)
         .to(&reputation_addr)
         .gas(10_000_000)
-        .raw_call("submit_feedback")
+        .raw_call("giveFeedbackSimple")
         .argument(&job_id_buf)
         .argument(&agent_nonce)
         .argument(&rating)

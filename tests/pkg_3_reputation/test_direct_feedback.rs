@@ -1,7 +1,6 @@
-// ERC-8004: authorize_feedback has been removed.
+// ERC-8004: Feedback is submitted directly.
 // Feedback is now submitted directly by the employer without authorization.
 // This test validates that the employer can submit feedback without
-// needing an authorize_feedback step.
 
 use multiversx_sc::types::ManagedBuffer;
 use multiversx_sc_snippets::imports::*;
@@ -65,14 +64,14 @@ async fn test_feedback_without_authorization() {
         .run()
         .await;
 
-    // 4. Submit Feedback directly (Employer) — no authorize_feedback needed (ERC-8004)
+    // 4. Submit Feedback directly (Employer)
     let rating: u64 = 85;
     interactor
         .tx()
         .from(&employer)
         .to(&reputation_addr)
         .gas(10_000_000)
-        .raw_call("submit_feedback")
+        .raw_call("giveFeedbackSimple")
         .argument(&job_id_buf)
         .argument(&agent_nonce_buf)
         .argument(&rating)

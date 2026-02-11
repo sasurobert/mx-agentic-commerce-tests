@@ -173,7 +173,7 @@ async fn test_reputation_validation_loop() {
         .await;
     println!("Proof submitted: {}", proof);
 
-    // ── 7. ERC-8004: validation_request + validation_response (replaces verify_job) ──
+    // ── 7. validation_request + validation_response ──
     let request_hash = "req-hash-001";
     let request_hash_buf: ManagedBuffer<StaticApi> =
         ManagedBuffer::new_from_bytes(request_hash.as_bytes());
@@ -227,7 +227,7 @@ async fn test_reputation_validation_loop() {
         .from(&wallet_alice)
         .to(&reputation_addr)
         .gas(20_000_000)
-        .raw_call("submit_feedback")
+        .raw_call("giveFeedbackSimple")
         .argument(&job_id_buf)
         .argument(&agent_nonce_buf)
         .argument(&rating_buf)

@@ -155,8 +155,6 @@ async fn test_gasless_flows() {
         .await;
     println!("Proof submitted");
 
-    // ERC-8004: No verify_job needed
-    println!("ERC-8004: skipping verify_job");
 
     // 7. Test facilitator's verify endpoint
     let verify_resp = client

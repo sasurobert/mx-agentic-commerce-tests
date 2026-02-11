@@ -245,7 +245,7 @@ async fn test_full_agent_economy_loop() {
         .from(&wallet_alice)
         .to(&reputation_addr)
         .gas(20_000_000)
-        .raw_call("submit_feedback")
+        .raw_call("giveFeedbackSimple")
         .argument(&job_id_buf)
         .argument(&agent_nonce)
         .argument(&rating_big)

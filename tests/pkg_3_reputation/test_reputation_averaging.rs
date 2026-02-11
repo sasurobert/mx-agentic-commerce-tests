@@ -65,14 +65,13 @@ async fn test_reputation_averaging() {
             .argument(&zero_proof)
             .run()
             .await;
-        // ERC-8004: No verify_job or authorize_feedback needed
         // Submit
         interactor
             .tx()
             .from(&employer)
             .to(&reputation_addr)
             .gas(10_000_000)
-            .raw_call("submit_feedback")
+            .raw_call("giveFeedbackSimple")
             .argument(&job_id_buf)
             .argument(&agent_nonce)
             .argument(rating)
@@ -152,7 +151,6 @@ async fn test_max_rating() {
         .argument(&proof_buf)
         .run()
         .await;
-    // ERC-8004: No verify_job or authorize_feedback needed
 
     // Submit max rating: 100
     interactor
@@ -160,7 +158,7 @@ async fn test_max_rating() {
         .from(&employer)
         .to(&reputation_addr)
         .gas(10_000_000)
-        .raw_call("submit_feedback")
+        .raw_call("giveFeedbackSimple")
         .argument(&job_id_buf)
         .argument(&agent_nonce)
         .argument(&100u64)
@@ -233,13 +231,12 @@ async fn test_min_rating() {
             .argument(&proof_buf)
             .run()
             .await;
-        // ERC-8004: No verify_job or authorize_feedback needed
         interactor
             .tx()
             .from(&employer)
             .to(&reputation_addr)
             .gas(10_000_000)
-            .raw_call("submit_feedback")
+            .raw_call("giveFeedbackSimple")
             .argument(&job_id_buf)
             .argument(&agent_nonce)
             .argument(rating)

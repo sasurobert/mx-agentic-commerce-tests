@@ -70,7 +70,6 @@ async fn setup_env() -> (
         .run()
         .await;
 
-    // ERC-8004: No verify_job needed
 
     (
         pm,
@@ -83,8 +82,6 @@ async fn setup_env() -> (
     )
 }
 
-// test_authorize_feedback_non_owner — REMOVED (authorize_feedback no longer exists)
-// test_authorize_feedback_nonexistent_job — REMOVED (authorize_feedback no longer exists)
 
 #[tokio::test]
 async fn test_submit_feedback_non_employer() {
@@ -98,7 +95,7 @@ async fn test_submit_feedback_non_employer() {
         .from(&mallory)
         .to(&reputation_addr)
         .gas(20_000_000)
-        .raw_call("submit_feedback")
+        .raw_call("giveFeedbackSimple")
         .argument(&job_id_buf)
         .argument(&1u64) // agent nonce
         .argument(&80u64) // rating
@@ -119,7 +116,7 @@ async fn test_submit_feedback_duplicate() {
         .from(&employer)
         .to(&reputation_addr)
         .gas(20_000_000)
-        .raw_call("submit_feedback")
+        .raw_call("giveFeedbackSimple")
         .argument(&job_id_buf)
         .argument(&1u64)
         .argument(&80u64)
@@ -132,7 +129,7 @@ async fn test_submit_feedback_duplicate() {
         .from(&employer)
         .to(&reputation_addr)
         .gas(20_000_000)
-        .raw_call("submit_feedback")
+        .raw_call("giveFeedbackSimple")
         .argument(&job_id_buf)
         .argument(&1u64)
         .argument(&90u64)

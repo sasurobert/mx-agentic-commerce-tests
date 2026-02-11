@@ -133,8 +133,6 @@ async fn test_chain_of_command() {
         .await;
     println!("B submitted proof for {}", job_ab);
 
-    // ERC-8004: No verify_job or authorize_feedback needed
-    println!("ERC-8004: skipping verify_job and authorize_feedback");
 
     // Bob rates C
     interactor
@@ -142,7 +140,7 @@ async fn test_chain_of_command() {
         .from(&bob)
         .to(&reputation_addr)
         .gas(10_000_000)
-        .raw_call("submit_feedback")
+        .raw_call("giveFeedbackSimple")
         .argument(&job_bc_buf)
         .argument(&agent_c_nonce)
         .argument(&95u64)
@@ -156,7 +154,7 @@ async fn test_chain_of_command() {
         .from(&alice)
         .to(&reputation_addr)
         .gas(10_000_000)
-        .raw_call("submit_feedback")
+        .raw_call("giveFeedbackSimple")
         .argument(&job_ab_buf)
         .argument(&agent_b_nonce)
         .argument(&88u64)

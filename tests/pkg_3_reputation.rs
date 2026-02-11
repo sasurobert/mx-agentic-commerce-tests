@@ -3,8 +3,8 @@ use multiversx_sc_snippets::imports::*;
 #[path = "common/mod.rs"]
 mod common;
 
-#[path = "pkg_3_reputation/test_authorize_feedback.rs"]
-pub mod test_authorize_feedback;
+#[path = "pkg_3_reputation/test_direct_feedback.rs"]
+pub mod test_direct_feedback;
 
 #[path = "pkg_3_reputation/test_submit_feedback.rs"]
 pub mod test_submit_feedback;

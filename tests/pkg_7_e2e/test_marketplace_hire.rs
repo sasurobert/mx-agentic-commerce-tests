@@ -79,8 +79,6 @@ async fn test_marketplace_hire() {
         println!("Proof submitted for: {}", job_id);
     }
 
-    // ERC-8004: No verify_job or authorize_feedback needed
-    println!("ERC-8004: skipping verify_job and authorize_feedback");
 
     // 8. Employer submits feedback with different ratings
     let ratings = [80u64, 95u64];
@@ -91,7 +89,7 @@ async fn test_marketplace_hire() {
             .from(&employer)
             .to(&reputation_addr)
             .gas(10_000_000)
-            .raw_call("submit_feedback")
+            .raw_call("giveFeedbackSimple")
             .argument(&job_id_buf)
             .argument(&agent_nonce)
             .argument(rating)
