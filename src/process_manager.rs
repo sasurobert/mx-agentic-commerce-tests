@@ -106,8 +106,29 @@ impl ProcessManager {
 impl Drop for ProcessManager {
     fn drop(&mut self) {
         for mut child in self.children.drain(..) {
-             let _ = child.kill();
-             let _ = child.wait();
+            let _ = child.kill();
+            let _ = child.wait();
         }
+
+        // Kill any orphaned chain-simulator processes
+        let _ = Command::new("pkill")
+            .arg("-f")
+            .arg("mx-chain-simulator-go")
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .status();
+
+        // Wait for port 8085 to be fully released (TIME_WAIT cleanup)
+        let port = 8085u16;
+        for i in 0..30 {
+            if TcpStream::connect(format!("127.0.0.1:{}", port)).is_err() {
+                if i > 0 {
+                    println!("Port {} released after {}ms.", port, i * 500);
+                }
+                return;
+            }
+            std::thread::sleep(Duration::from_millis(500));
+        }
+        println!("Warning: port {} still in use after 15s cleanup wait.", port);
     }
 }
