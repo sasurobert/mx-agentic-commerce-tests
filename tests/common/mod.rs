@@ -9,6 +9,9 @@ use multiversx_sc_snippets::imports::*;
 pub mod interactors;
 pub use interactors::*;
 
+pub mod escrow_interactor;
+pub use escrow_interactor::*;
+
 pub const GATEWAY_URL: &str = "http://localhost:8085";
 pub const WASM_PATH: &str = "artifacts/identity-registry.wasm";
 pub const VALIDATION_WASM_PATH: &str = "artifacts/validation-registry.wasm";
