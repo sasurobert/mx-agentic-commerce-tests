@@ -80,7 +80,7 @@ async fn test_relayed_registration() {
     pm.start_node_service(
         "Relayer",
         "../x402_integration/multiversx-openclaw-relayer",
-        "dist/src/index.js",
+        "dist/index.js",
         env,
         3003,
     )

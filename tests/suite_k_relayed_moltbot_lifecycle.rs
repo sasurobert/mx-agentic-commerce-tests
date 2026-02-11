@@ -102,7 +102,7 @@ async fn test_relayed_moltbot_full_lifecycle() {
     pm.start_node_service(
         "Relayer",
         "../x402_integration/multiversx-openclaw-relayer",
-        "dist/src/index.js",
+        "dist/index.js",
         relayer_env,
         RELAYER_PORT,
     )

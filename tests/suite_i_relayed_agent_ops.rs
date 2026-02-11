@@ -119,7 +119,7 @@ async fn test_relayed_agent_operations() {
     pm.start_node_service(
         "Relayer",
         "../x402_integration/multiversx-openclaw-relayer",
-        "dist/src/index.js",
+        "dist/index.js",
         env,
         RELAYER_PORT,
     )
