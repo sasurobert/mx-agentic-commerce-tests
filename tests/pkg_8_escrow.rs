@@ -4,6 +4,8 @@ mod common;
 mod test_deposit_egld;
 #[path = "pkg_8_escrow/test_deposit_release.rs"]
 mod test_deposit_release;
+#[path = "pkg_8_escrow/test_error_edge_cases.rs"]
+mod test_error_edge_cases;
 #[path = "pkg_8_escrow/test_multi_job.rs"]
 mod test_multi_job;
 #[path = "pkg_8_escrow/test_refund_after_deadline.rs"]

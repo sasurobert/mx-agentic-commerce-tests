@@ -94,7 +94,47 @@ async fn test_happy_path_escrow_lifecycle() {
         .await;
     println!("✓ Proof submitted");
 
-    // 8. Employer (Bob) releases escrow
+    // 8. ERC-8004: validation_request + validation_response (transitions job to Verified)
+    let request_hash_buf = ManagedBuffer::<StaticApi>::new_from_bytes(b"req-hash-t001");
+    let validator_managed: ManagedAddress<StaticApi> = ManagedAddress::from_address(&owner);
+    let request_uri_buf = ManagedBuffer::<StaticApi>::new_from_bytes(b"https://validator.io/check");
+
+    interactor
+        .tx()
+        .from(&owner)
+        .to(&validation_addr)
+        .gas(20_000_000)
+        .raw_call("validation_request")
+        .argument(&job_id_buf)
+        .argument(&validator_managed)
+        .argument(&request_uri_buf)
+        .argument(&request_hash_buf)
+        .run()
+        .await;
+    println!("✓ Validation requested");
+
+    let response_uri_buf =
+        ManagedBuffer::<StaticApi>::new_from_bytes(b"https://validator.io/result");
+    let response_hash_buf = ManagedBuffer::<StaticApi>::new_from_bytes(b"resp-hash-t001");
+    let tag_buf = ManagedBuffer::<StaticApi>::new_from_bytes(b"quality-check");
+    let response_code: u8 = 1; // 1 = approved → Verified
+
+    interactor
+        .tx()
+        .from(&owner)
+        .to(&validation_addr)
+        .gas(20_000_000)
+        .raw_call("validation_response")
+        .argument(&request_hash_buf)
+        .argument(&response_code)
+        .argument(&response_uri_buf)
+        .argument(&response_hash_buf)
+        .argument(&tag_buf)
+        .run()
+        .await;
+    println!("✓ Validation approved → job Verified");
+
+    // 9. Employer (Bob) releases escrow
     interactor
         .tx()
         .from(&employer)
