@@ -11,21 +11,26 @@ mod common;
 use common::GATEWAY_URL;
 
 async fn read_json_response(reader: &mut BufReader<ChildStdout>) -> String {
-    let mut line = String::new();
-    loop {
-        line.clear();
-        let bytes = reader
-            .read_line(&mut line)
-            .await
-            .expect("Failed to read line");
-        if bytes == 0 {
-            panic!("Unexpected EOF from MCP Server");
+    let timeout_dur = Duration::from_secs(30);
+    tokio::time::timeout(timeout_dur, async {
+        let mut line = String::new();
+        loop {
+            line.clear();
+            let bytes = reader
+                .read_line(&mut line)
+                .await
+                .expect("Failed to read line");
+            if bytes == 0 {
+                panic!("Unexpected EOF from MCP Server");
+            }
+            let trimmed = line.trim();
+            if trimmed.starts_with('{') {
+                return line;
+            }
         }
-        let trimmed = line.trim();
-        if trimmed.starts_with('{') {
-            return line;
-        }
-    }
+    })
+    .await
+    .expect("MCP Server response timed out after 30s")
 }
 
 async fn mcp_call(
@@ -126,12 +131,13 @@ async fn test_mcp_extended_tool_coverage() {
 
     // ── 2. Deploy contracts for registry tools ──
     // Registry tools need deployed identity/validation/reputation contracts
-    let alice_bech32 = "erd1qyu5wthldzr8wx5c9ucg8kjagg0jfs53s8nr3zpz3hypefsdd8ssycr6th";
-    common::fund_address_on_simulator(alice_bech32, "100000000000000000000000").await;
-
-    let mut interactor = Interactor::new(GATEWAY_URL).await;
+    let mut interactor = Interactor::new(GATEWAY_URL).await.use_chain_simulator(true);
     let alice_wallet = Wallet::from_pem_file(pem_path.to_str().unwrap()).expect("PEM load");
     let alice_addr = interactor.register_wallet(alice_wallet.clone()).await;
+
+    // Fund the actual PEM wallet address (may differ from well-known alice)
+    let alice_bech32 = common::address_to_bech32(&alice_addr);
+    common::fund_address_on_simulator(&alice_bech32, "100000000000000000000000").await;
 
     let (identity, validation_addr, reputation_addr) =
         common::deploy_all_registries(&mut interactor, alice_addr.clone()).await;
@@ -158,6 +164,7 @@ async fn test_mcp_extended_tool_coverage() {
         .current_dir("../multiversx-mcp-server")
         .env("MVX_API_URL", GATEWAY_URL)
         .env("MVX_NETWORK", "devnet")
+        .env("MVX_CHAIN_ID", &chain_id)
         .env("MVX_WALLET_PEM", pem_path.to_str().unwrap())
         .env("MVX_IDENTITY_CONTRACT", &identity_bech32)
         .env("MVX_VALIDATION_CONTRACT", &validation_bech32)

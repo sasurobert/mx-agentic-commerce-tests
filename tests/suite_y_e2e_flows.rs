@@ -60,7 +60,7 @@ async fn test_e2e_flows() {
         .env("MULTIVERSX_PRIVATE_KEY", &agent_a_pk)
         .env("MULTIVERSX_API_URL", GATEWAY_URL)
         .env("IDENTITY_REGISTRY_ADDRESS", &identity_bech32)
-        .env("CHAIN_ID", &chain_id)
+        .env("MULTIVERSX_CHAIN_ID", &chain_id)
         .env("AGENT_NAME", "ProviderAgentA")
         .env("AGENT_URI", "https://agent-a.example.com/manifest")
         .current_dir("../moltbot-starter-kit")
@@ -332,7 +332,7 @@ async fn test_e2e_flows() {
         .env("MULTIVERSX_PRIVATE_KEY", &bot_pk)
         .env("MULTIVERSX_API_URL", GATEWAY_URL)
         .env("IDENTITY_REGISTRY_ADDRESS", &identity_bech32)
-        .env("CHAIN_ID", &chain_id)
+        .env("MULTIVERSX_CHAIN_ID", &chain_id)
         .env(
             "MULTIVERSX_RELAYER_URL",
             format!("http://localhost:{}", relayer_port),

@@ -159,8 +159,8 @@ async fn test_moltbot_update_manifest() {
     }
     println!("✅ Agent registered with NFT nonce: {}", agent_nonce_val);
 
-    // 6. Write config.json for update-manifest
-    //    The update_manifest.ts script reads config.json for nonce, manifestUri, metadata
+    // 6. Write agent.config.json for update-manifest
+    //    The update_manifest.ts script reads agent.config.json for nonce, manifestUri, metadata
     let config_json = serde_json::json!({
         "agentName": "moltbot",
         "capabilities": ["inference", "summarization"],
@@ -176,13 +176,13 @@ async fn test_moltbot_update_manifest() {
         .parent()
         .unwrap()
         .join("moltbot-starter-kit")
-        .join("config.json");
+        .join("agent.config.json");
     std::fs::write(
         &config_path,
         serde_json::to_string_pretty(&config_json).unwrap(),
     )
-    .expect("Failed to write config.json");
-    println!("Wrote config.json with nonce={}", agent_nonce_val);
+    .expect("Failed to write agent.config.json");
+    println!("Wrote agent.config.json with nonce={}", agent_nonce_val);
 
     // 7. Run Update Manifest Script (Direct)
     println!("\n═══ Step 2: Moltbot Update Manifest (Direct TX) ═══");
@@ -248,6 +248,6 @@ async fn test_moltbot_update_manifest() {
 
     // 9. Cleanup
     let _ = std::fs::remove_dir_all(&temp_dir);
-    let _ = std::fs::remove_file(&config_path);
+    let _ = std::fs::remove_file(&config_path); // cleanup agent.config.json
     println!("✅ Suite E2 Complete: Moltbot direct registration + update manifest PASSED.");
 }
