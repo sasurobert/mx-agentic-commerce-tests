@@ -30,7 +30,7 @@ async fn test_idempotency() {
         ("NETWORK_PROVIDER", GATEWAY_URL),
         ("GATEWAY_URL", GATEWAY_URL),
         ("CHAIN_ID", chain_id.as_str()),
-        ("SKIP_SIMULATION", "true"),
+        ("SKIP_SIMULATION", "false"),
     ];
 
     pm.start_node_service(

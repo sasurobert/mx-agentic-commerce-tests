@@ -165,7 +165,7 @@ async fn test_relayed_facilitator_settle() {
         ("RELAYER_WALLETS_DIR", relayer_wallets_dir.to_str().unwrap()),
         ("STORAGE_TYPE", "json"),
         ("STORE_PATH", store_path.to_str().unwrap()),
-        ("SKIP_SIMULATION", "true"),
+        ("SKIP_SIMULATION", "false"),
         ("LOG_LEVEL", "debug"),
     ];
 

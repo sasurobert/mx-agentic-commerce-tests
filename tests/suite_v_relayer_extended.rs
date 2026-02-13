@@ -89,7 +89,7 @@ async fn test_relayer_extended_operations() {
         ("PORT", "3004"),
         ("CHAIN_ID", chain_id.as_str()),
         ("IS_TEST_ENV", "true"),
-        ("SKIP_SIMULATION", "true"),
+        ("SKIP_SIMULATION", "false"),
         ("LOG_LEVEL", "debug"),
     ];
 

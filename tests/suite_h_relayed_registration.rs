@@ -74,7 +74,8 @@ async fn test_relayed_registration() {
         ("PORT", "3003"), // Different port
         ("CHAIN_ID", chain_id.as_str()),
         ("IS_TEST_ENV", "true"),
-        ("SKIP_SIMULATION", "true"),
+        ("SKIP_SIMULATION", "false"),
+        ("LOG_LEVEL", "trace"),
     ];
 
     pm.start_node_service(

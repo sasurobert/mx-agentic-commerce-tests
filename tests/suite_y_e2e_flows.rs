@@ -96,7 +96,7 @@ async fn test_e2e_flows() {
             ("GATEWAY_URL", GATEWAY_URL),
             ("CHAIN_ID", chain_id.as_str()),
             ("SQLITE_DB_PATH", fac_db),
-            ("SKIP_SIMULATION", "true"),
+            ("SKIP_SIMULATION", "false"),
         ],
         FACILITATOR_PORT,
     )
@@ -305,7 +305,7 @@ async fn test_e2e_flows() {
             ("RELAYER_WALLETS_DIR", relayer_wallets_dir.as_str()),
             ("CHAIN_ID", chain_id.as_str()),
             ("IS_TEST_ENV", "true"),
-            ("SKIP_SIMULATION", "true"),
+            ("SKIP_SIMULATION", "false"),
             ("LOG_LEVEL", "warn"),
         ],
         relayer_port,

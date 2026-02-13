@@ -95,7 +95,7 @@ async fn test_relayer_advanced() {
             ("RELAYER_WALLETS_DIR", relayer_wallets_dir.as_str()),
             ("CHAIN_ID", chain_id.as_str()),
             ("IS_TEST_ENV", "true"),
-            ("SKIP_SIMULATION", "true"),
+            ("SKIP_SIMULATION", "false"),
             ("LOG_LEVEL", "warn"),
         ],
         RELAYER_PORT,

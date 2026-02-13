@@ -96,7 +96,7 @@ async fn test_relayed_moltbot_full_lifecycle() {
         ("PORT", "3003"),
         ("CHAIN_ID", chain_id.as_str()),
         ("IS_TEST_ENV", "true"),
-        ("SKIP_SIMULATION", "true"),
+        ("SKIP_SIMULATION", "false"),
     ];
 
     pm.start_node_service(
@@ -120,7 +120,7 @@ async fn test_relayed_moltbot_full_lifecycle() {
         ("RELAYER_WALLETS_DIR", relayer_wallets_dir.to_str().unwrap()),
         ("STORAGE_TYPE", "json"),
         ("STORE_PATH", store_path.to_str().unwrap()),
-        ("SKIP_SIMULATION", "true"),
+        ("SKIP_SIMULATION", "false"),
     ];
 
     pm.start_node_service(

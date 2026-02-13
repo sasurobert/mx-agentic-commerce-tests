@@ -109,7 +109,7 @@ async fn test_multi_agent_payment_delegation() {
         ), // Dummy
         ("STORE_PATH", "tests/temp_multi_agent/facilitator.db"),
         ("STORAGE_TYPE", "json"),
-        ("SKIP_SIMULATION", "true"),
+        ("SKIP_SIMULATION", "false"),
     ];
 
     pm.start_node_service(

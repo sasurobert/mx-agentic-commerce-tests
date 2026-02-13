@@ -100,7 +100,7 @@ async fn test_x402_lifecycle_with_proof() {
         ("GATEWAY_URL", GATEWAY_URL),
         ("CHAIN_ID", chain_id.as_str()),
         ("SQLITE_DB_PATH", db_path),
-        ("SKIP_SIMULATION", "true"),
+        ("SKIP_SIMULATION", "false"),
     ];
 
     pm.start_node_service(
