@@ -1,0 +1,34 @@
+{
+  "name": "mx-agentic-commerce-tests",
+  "version": "1.0.0",
+  "description": "Comprehensive integration test suite for the **MultiversX Agentic Commerce** ecosystem. Orchestrates real instances of all components — no mocks.",
+  "main": "index.js",
+  "directories": {
+    "test": "tests"
+  },
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/sasurobert/mx-agentic-commerce-tests.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "module",
+  "bugs": {
+    "url": "https://github.com/sasurobert/mx-agentic-commerce-tests/issues"
+  },
+  "homepage": "https://github.com/sasurobert/mx-agentic-commerce-tests#readme",
+  "devDependencies": {
+    "@modelcontextprotocol/sdk": "^1.27.1",
+    "@multiversx/sdk-core": "^15.4.0",
+    "@multiversx/sdk-network-providers": "^2.9.3",
+    "@multiversx/sdk-wallet": "^4.6.0",
+    "@types/node": "^25.5.0",
+    "tsx": "^4.21.0",
+    "typescript": "^5.9.3",
+    "vitest": "^4.1.0"
+  }
+}
