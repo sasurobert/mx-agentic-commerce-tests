@@ -46,7 +46,7 @@ describe("Agentic Commerce MPP End-to-End", () => {
             receiverAddress = senderSigner.getAddress().bech32();
         }
 
-        const mpp = createMppMiddleware(server as any, {
+        const mpp = createMppMiddleware(server as unknown as any, {
             "getPremiumData": { amount: "0.01", currency: "EGLD", recipient: receiverAddress } // 0.01 EGLD
         }, {
             networkProviderUrl: NETWORK_URL,
@@ -83,9 +83,10 @@ describe("Agentic Commerce MPP End-to-End", () => {
             await client.request({
                 method: "tools/call",
                 params: { name: "getPremiumData", arguments: {} }
-            }, CallToolRequestSchema.params as any);
+            }, CallToolRequestSchema.params as Record<string, unknown>);
             expect.fail("Expected tool call to fail with 402");
-        } catch (e: any) {
+        } catch (error: unknown) {
+            const e = error as any;
             expect(e.code).toBe(-32042); // mppx challenge MCP code
             expect(e.data?.challenges?.[0]).toBeDefined();
             expect(e.data.challenges[0].method).toBe("multiversx");
@@ -98,13 +99,14 @@ describe("Agentic Commerce MPP End-to-End", () => {
     // If the network URL is devnet and we used the fallback PEM, it will inevitably fail on broadcast.
     test("Moltbot interceptor handles 402, executes payment, and retries the tool successfully", async () => {
         
-        async function robustCallTool(params: any): Promise<any> {
+        async function robustCallTool(params: Record<string, unknown>): Promise<unknown> {
             try {
                 return await client.request({
                     method: "tools/call",
                     params: params
-                }, CallToolRequestSchema.params as any); 
-            } catch (e: any) {
+                }, CallToolRequestSchema.params as Record<string, unknown>); 
+            } catch (error: unknown) {
+                const e = error as any;
                 const code = e?.code;
                 let mppUrl: string | undefined;
                 
@@ -135,7 +137,7 @@ describe("Agentic Commerce MPP End-to-End", () => {
                                 _mpp_payment_proof: paymentProofTxHash
                             }
                         }
-                    }, CallToolRequestSchema.params as any);
+                    }, CallToolRequestSchema.params as Record<string, unknown>);
                 }
                 throw e;
             }
@@ -144,7 +146,8 @@ describe("Agentic Commerce MPP End-to-End", () => {
         try {
             const result = await robustCallTool({ name: "getPremiumData", arguments: {} });
             expect(result.content[0].text).toBe("Premium Data Content!");
-        } catch (e: any) {
+        } catch (error: unknown) {
+            const e = error as Error;
             // Because the simulator might not be running or account has 0 funds, catch & ignore failures 
             // but log them nicely as per testing environment constraints.
             console.warn("End-to-end chain execution failed (likely due to insufficient funds or offline simulator). Error:", e.message);
