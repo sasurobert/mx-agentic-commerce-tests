@@ -281,8 +281,11 @@ async fn test_relayed_agent_operations() {
                 const sender = new Address('{}');
 
                 const rawAbi = fs.readFileSync('identity-registry.abi.json', 'utf8')
-                    .replace(/"TokenId"/g, '"TokenIdentifier"')
-                    .replace(/"NonZeroBigUint"/g, '"BigUint"');
+                    .replace(/\bTokenId\b/g, 'TokenIdentifier')
+                    .replace(/\bNonZeroBigUint\b/g, 'BigUint')
+                    .replace(/\bcounted-variadic\b/g, 'variadic')
+                    .replace(/\bList</g, 'variadic<')
+                    .replace(/\bPayment\b/g, 'EgldOrEsdtTokenPayment');
                 const abiJson = JSON.parse(rawAbi);
                 const abi = Abi.create(abiJson);
                 const config = new TransactionsFactoryConfig({{ chainID: '{}' }});
