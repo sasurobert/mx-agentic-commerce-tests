@@ -1,6 +1,5 @@
 use crate::common::{
     address_to_bech32, deploy_all_registries, fund_address_on_simulator, get_simulator_chain_id,
-    GATEWAY_URL,
 };
 use multiversx_sc_snippets::imports::*;
 use mx_agentic_commerce_tests::ProcessManager;
@@ -37,18 +36,19 @@ async fn call_tool_soft(
 #[tokio::test]
 async fn test_registry_tools() {
     let mut pm = ProcessManager::new();
-    pm.start_chain_simulator(8085)
+    let port = pm.start_chain_simulator()
         .expect("Failed to start simulator");
+    let gateway_url = format!("http://localhost:{}", port);
     sleep(Duration::from_secs(2)).await;
 
-    let chain_id = get_simulator_chain_id().await;
-    let mut interactor = Interactor::new(GATEWAY_URL).await.use_chain_simulator(true);
+    let chain_id = get_simulator_chain_id(&gateway_url).await;
+    let mut interactor = Interactor::new(&gateway_url).await.use_chain_simulator(true);
     interactor.generate_blocks_until_all_activations().await;
 
     // Setup owner wallet
     let owner = interactor.register_wallet(test_wallets::alice()).await;
     let owner_bech32 = address_to_bech32(&owner);
-    fund_address_on_simulator(&owner_bech32, "500000000000000000000").await;
+    fund_address_on_simulator(&owner_bech32, "500000000000000000000", &gateway_url).await;
 
     // Deploy all 3 registries
     println!("Deploying all registries...");
@@ -88,6 +88,7 @@ async fn test_registry_tools() {
             ("MVX_REGISTRY_VALIDATION", validation_bech32.as_str()),
             ("MVX_REGISTRY_REPUTATION", reputation_bech32.as_str()),
         ],
+        &gateway_url,
     )
     .await;
 

@@ -3,18 +3,19 @@ use multiversx_sc_snippets::imports::*;
 use mx_agentic_commerce_tests::ProcessManager;
 use tokio::time::{sleep, Duration};
 
-use crate::common::{deploy_all_registries, vm_query, EscrowInteractor, EscrowStatus, GATEWAY_URL};
+use crate::common::{deploy_all_registries, vm_query, EscrowInteractor, EscrowStatus};
 
 /// T-001: Full happy path lifecycle
 /// Register agent → employer deposits to escrow → init job → submit proof → employer releases escrow → feedback → verify score
 #[tokio::test]
 async fn test_happy_path_escrow_lifecycle() {
     let mut pm = ProcessManager::new();
-    pm.start_chain_simulator(8085)
+    let port = pm.start_chain_simulator()
         .expect("Failed to start simulator");
+    let gateway_url = format!("http://localhost:{}", port);
     sleep(Duration::from_secs(2)).await;
 
-    let mut interactor = Interactor::new(GATEWAY_URL).await.use_chain_simulator(true);
+    let mut interactor = Interactor::new(&gateway_url).await.use_chain_simulator(true);
     // Alice = contract owner + agent
     let owner = interactor.register_wallet(test_wallets::alice()).await;
     // Bob = employer (hires the agent)

@@ -1,5 +1,5 @@
 use crate::common::{
-    create_pem_file, fund_address_on_simulator_custom, generate_random_private_key,
+    create_pem_file, fund_address_on_simulator, generate_random_private_key,
     issue_fungible_esdt_custom, IdentityRegistryInteractor, ServiceConfigInput,
     ValidationRegistryInteractor,
 };
@@ -16,9 +16,7 @@ use tokio::time::{sleep, Duration};
 /// - a funded employer wallet
 ///
 /// Returns (pm, interactor, validation_interactor, identity, owner, employer_wallet, agent_nonce, gateway_url).
-async fn setup_payment_env(
-    port: u16,
-) -> (
+async fn setup_payment_env() -> (
     ProcessManager,
     Interactor,
     ValidationRegistryInteractor,
@@ -28,10 +26,10 @@ async fn setup_payment_env(
     u64,
     String,
 ) {
-    let gateway_url = format!("http://localhost:{}", port);
     let mut pm = ProcessManager::new();
-    pm.start_chain_simulator(port)
+    let port = pm.start_chain_simulator()
         .expect("Failed to start simulator");
+    let gateway_url = format!("http://localhost:{}", port);
     sleep(Duration::from_secs(3)).await;
 
     let mut interactor = Interactor::new(&gateway_url)
@@ -48,7 +46,7 @@ async fn setup_payment_env(
         &owner.to_bech32("erd").to_string(),
     );
     interactor.register_wallet(owner_wallet.clone()).await;
-    fund_address_on_simulator_custom(
+    fund_address_on_simulator(
         &owner.to_bech32("erd").to_string(),
         "100000000000000000000000",
         &gateway_url,
@@ -59,7 +57,7 @@ async fn setup_payment_env(
     let employer_pk = generate_random_private_key();
     let employer_wallet = Wallet::from_private_key(&employer_pk).unwrap();
     let employer = employer_wallet.to_address();
-    fund_address_on_simulator_custom(
+    fund_address_on_simulator(
         &employer.to_bech32("erd").to_string(),
         "100000000000000000000000",
         &gateway_url,
@@ -119,7 +117,7 @@ async fn test_init_job_wrong_token() {
         _employer_wallet,
         agent_nonce,
         gateway_url,
-    ) = setup_payment_env(8086).await;
+    ) = setup_payment_env().await;
 
     // Issue a dummy ESDT so we have a real token to send
     let token_id = issue_fungible_esdt_custom(
@@ -167,7 +165,7 @@ async fn test_init_job_insufficient_payment() {
         employer_wallet,
         agent_nonce,
         gateway_url,
-    ) = setup_payment_env(8087).await;
+    ) = setup_payment_env().await;
 
     let employer_addr = employer_wallet.to_address();
     let mut interactor_employer = Interactor::new(&gateway_url)
@@ -209,7 +207,7 @@ async fn test_init_job_no_service_id() {
         employer_wallet,
         agent_nonce,
         gateway_url,
-    ) = setup_payment_env(8088).await;
+    ) = setup_payment_env().await;
 
     let employer = employer_wallet.to_address();
     let mut interactor_employer = Interactor::new(&gateway_url)

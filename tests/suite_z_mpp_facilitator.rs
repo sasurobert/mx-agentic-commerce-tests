@@ -9,7 +9,7 @@ use tokio::time::{sleep, Duration};
 mod common;
 use common::{
     address_to_bech32, create_pem_file, fund_address_on_simulator, generate_blocks_on_simulator,
-    generate_random_private_key, GATEWAY_URL,
+    generate_random_private_key,
 };
 
 const MPP_PORT: u16 = 3006;
@@ -32,17 +32,18 @@ async fn test_relayed_mpp_facilitator() {
     let mut pm = ProcessManager::new();
 
     // 1. Start Chain Simulator
-    pm.start_chain_simulator(8085).expect("Failed to start Sim");
+    let port = pm.start_chain_simulator().unwrap(); // .expect("Failed to start Sim");
+    let gateway_url = format!("http://localhost:{}", port);
     sleep(Duration::from_secs(2)).await;
 
-    let mut interactor = Interactor::new(GATEWAY_URL).await.use_chain_simulator(true);
+    let mut interactor = Interactor::new(&gateway_url).await.use_chain_simulator(true);
 
-    let chain_id = common::get_simulator_chain_id().await;
+    let chain_id = common::get_simulator_chain_id(&gateway_url).await;
     println!("Simulator ChainID: {}", chain_id);
 
     let admin = interactor.register_wallet(test_wallets::alice()).await;
     let admin_bech32 = address_to_bech32(&admin);
-    fund_address_on_simulator(&admin_bech32, "100000000000000000000000").await; 
+    fund_address_on_simulator(&admin_bech32, "100000000000000000000000", &gateway_url).await; 
 
     // 2. Setup Alice's wallet (which is used as Relayer by mpp-facilitator-mvx defaults)
     let project_root = std::env::current_dir().unwrap();
@@ -78,7 +79,7 @@ async fn test_relayed_mpp_facilitator() {
     let bob_addr = address_to_bech32(&bob_wallet.to_address());
     let bob_sc_addr = Address::from_slice(bob_wallet.to_address().as_bytes());
     
-    fund_address_on_simulator(&bob_addr, "10000000000000000000").await; // 10 EGLD
+    fund_address_on_simulator(&bob_addr, "10000000000000000000", &gateway_url).await; // 10 EGLD
 
     // Receiver (can be anywhere, let's use Charlie)
     let charlie_pk = generate_random_private_key();
@@ -86,7 +87,7 @@ async fn test_relayed_mpp_facilitator() {
     let charlie_addr = address_to_bech32(&charlie_wallet.to_address());
     let charlie_sc_addr = Address::from_slice(charlie_wallet.to_address().as_bytes());
 
-    generate_blocks_on_simulator(5).await;
+    generate_blocks_on_simulator(5, &gateway_url).await;
     sleep(Duration::from_millis(500)).await;
 
     let temp_dir = project_root.join("tests").join("temp_suite_z");
@@ -102,7 +103,7 @@ async fn test_relayed_mpp_facilitator() {
     // 3. Start MPP Facilitator
     let env = vec![
         ("PORT", "3006"),
-        ("NETWORK_PROVIDER", GATEWAY_URL),
+        ("NETWORK_PROVIDER", gateway_url.as_str()),
         ("MPP_SECRET_KEY", "test-secret-key-12345678901234567890123456789012"),
     ];
 
@@ -163,7 +164,7 @@ async fn test_relayed_mpp_facilitator() {
     // 5. Submit to MPP Facilitator
     // Generating blocks to advance epoch because Relayed V3 transactions might be disabled on Epoch 0 in chain simulator
     println!("Advancing epoch to enable Relayed V3 on chain simulator...");
-    common::generate_blocks_on_simulator(50).await;
+    common::generate_blocks_on_simulator(50, &gateway_url).await;
     sleep(Duration::from_secs(2)).await;
 
     // ────────────────────────────────────────────
@@ -184,7 +185,7 @@ async fn test_relayed_mpp_facilitator() {
     assert!(body.contains("txHash"), "Should contain txHash");
     
     // Wait for block to produce
-    generate_blocks_on_simulator(5).await;
+    generate_blocks_on_simulator(5, &gateway_url).await;
     sleep(Duration::from_secs(2)).await;
 
     // 6. Verify Charlie received EGLD

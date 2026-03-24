@@ -3,16 +3,16 @@ use multiversx_sc_snippets::imports::*;
 use mx_agentic_commerce_tests::ProcessManager;
 use tokio::time::{sleep, Duration};
 
-use crate::common::GATEWAY_URL;
 
 #[tokio::test]
 async fn test_append_response() {
     let mut pm = ProcessManager::new();
-    pm.start_chain_simulator(8085)
+    let port = pm.start_chain_simulator()
         .expect("Failed to start simulator");
+    let gateway_url = format!("http://localhost:{}", port);
     sleep(Duration::from_secs(2)).await;
 
-    let mut interactor = Interactor::new(GATEWAY_URL).await.use_chain_simulator(true);
+    let mut interactor = Interactor::new(&gateway_url).await.use_chain_simulator(true);
     let owner = interactor.register_wallet(test_wallets::alice()).await;
     let employer = interactor.register_wallet(test_wallets::bob()).await;
 

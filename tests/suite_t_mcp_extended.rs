@@ -8,7 +8,7 @@ use tokio::process::Command;
 use tokio::time::{sleep, Duration};
 
 mod common;
-use common::GATEWAY_URL;
+
 
 async fn read_json_response(reader: &mut BufReader<ChildStdout>) -> String {
     let timeout_dur = Duration::from_secs(30);
@@ -119,11 +119,12 @@ async fn test_mcp_extended_tool_coverage() {
     let mut pm = ProcessManager::new();
 
     // ── 1. Start Chain Simulator ──
-    pm.start_chain_simulator(8085)
+    let port = pm.start_chain_simulator()
         .expect("Failed to start simulator");
+    let gateway_url = format!("http://localhost:{}", port);
     sleep(Duration::from_secs(2)).await;
 
-    let chain_id = common::get_simulator_chain_id().await;
+    let chain_id = common::get_simulator_chain_id(&gateway_url).await;
 
     // Use existing alice.pem
     let pem_path = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("alice.pem");
@@ -131,13 +132,13 @@ async fn test_mcp_extended_tool_coverage() {
 
     // ── 2. Deploy contracts for registry tools ──
     // Registry tools need deployed identity/validation/reputation contracts
-    let mut interactor = Interactor::new(GATEWAY_URL).await.use_chain_simulator(true);
+    let mut interactor = Interactor::new(&gateway_url).await.use_chain_simulator(true);
     let alice_wallet = Wallet::from_pem_file(pem_path.to_str().unwrap()).expect("PEM load");
     let alice_addr = interactor.register_wallet(alice_wallet.clone()).await;
 
     // Fund the actual PEM wallet address (may differ from well-known alice)
     let alice_bech32 = common::address_to_bech32(&alice_addr);
-    common::fund_address_on_simulator(&alice_bech32, "100000000000000000000000").await;
+    common::fund_address_on_simulator(&alice_bech32, "100000000000000000000000", &gateway_url).await;
 
     let (identity, validation_addr, reputation_addr) =
         common::deploy_all_registries(&mut interactor, alice_addr.clone()).await;
@@ -162,7 +163,7 @@ async fn test_mcp_extended_tool_coverage() {
         .arg("dist/index.js")
         .arg("mcp")
         .current_dir("../multiversx-mcp-server")
-        .env("MVX_API_URL", GATEWAY_URL)
+        .env("MVX_API_URL", &gateway_url)
         .env("MVX_NETWORK", "devnet")
         .env("MVX_CHAIN_ID", &chain_id)
         .env("MVX_WALLET_PEM", pem_path.to_str().unwrap())

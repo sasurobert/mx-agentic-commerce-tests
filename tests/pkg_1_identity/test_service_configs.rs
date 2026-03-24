@@ -1,5 +1,5 @@
 use crate::common::{
-    create_pem_file, fund_address_on_simulator_custom, generate_random_private_key,
+    create_pem_file, fund_address_on_simulator, generate_random_private_key,
     IdentityRegistryInteractor, ServiceConfigInput,
 };
 use multiversx_sc::types::{BigUint, EgldOrEsdtTokenIdentifier, TokenIdentifier};
@@ -7,21 +7,21 @@ use multiversx_sc_snippets::imports::*;
 use mx_agentic_commerce_tests::ProcessManager;
 use tokio::time::{sleep, Duration};
 
-const GATEWAY_URL: &str = "http://localhost:8088"; // Distinct port for this test
 
 #[tokio::test]
 async fn test_service_configs() {
     let mut process_manager = ProcessManager::new();
     // Start chain simulator on a distinct port to avoid conflicts
-    process_manager
-        .start_chain_simulator(8088)
+    let port = process_manager
+        .start_chain_simulator()
         .expect("Failed to start simulator");
 
     // Wait for simulator to be ready
     sleep(Duration::from_secs(3)).await;
+    let gateway_url = format!("http://localhost:{}", port);
 
     // 1. Prepare Interactor
-    let mut interactor = Interactor::new(GATEWAY_URL).await.use_chain_simulator(true); // Crucial for using simulator
+    let mut interactor = Interactor::new(&gateway_url).await.use_chain_simulator(true); // Crucial for using simulator
 
     // 2. Fund Owner Wallet
     let alice_private_key = generate_random_private_key();
@@ -38,10 +38,10 @@ async fn test_service_configs() {
     interactor.register_wallet(alice_wallet.clone()).await;
 
     // Fund alice
-    fund_address_on_simulator_custom(
+    fund_address_on_simulator(
         &alice_address.to_bech32("erd").to_string(),
         "100000000000000000000000", // 100,000 EGLD
-        GATEWAY_URL,
+        &gateway_url,
     )
     .await;
 
@@ -116,15 +116,15 @@ async fn test_service_configs() {
     let bob_address = bob_wallet.to_address();
 
     // Fund Bob
-    fund_address_on_simulator_custom(
+    fund_address_on_simulator(
         &bob_address.to_bech32("erd").to_string(),
         "100000000000000000000000",
-        GATEWAY_URL,
+        &gateway_url,
     )
     .await;
 
     // Use separate interactor for Bob to avoid borrowing conflicts
-    let mut interactor_bob = Interactor::new(GATEWAY_URL).await.use_chain_simulator(true);
+    let mut interactor_bob = Interactor::new(&gateway_url).await.use_chain_simulator(true);
     interactor_bob.register_wallet(bob_wallet.clone()).await;
 
     let contract_address = identity_interactor.contract_address.clone();

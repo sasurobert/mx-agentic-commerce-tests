@@ -7,7 +7,7 @@ use tokio::time::{sleep, Duration};
 mod common;
 use common::{
     address_to_bech32, fund_address_on_simulator, generate_random_private_key,
-    get_simulator_chain_id, IdentityRegistryInteractor, ServiceConfigInput, GATEWAY_URL,
+    get_simulator_chain_id, IdentityRegistryInteractor, ServiceConfigInput,
 };
 
 const FACILITATOR_PORT: u16 = 3070;
@@ -79,11 +79,12 @@ async fn test_facilitator_extended() {
     let mut pm = ProcessManager::new();
 
     // ── 1. Start Chain Simulator ──
-    pm.start_chain_simulator(8085)
+    let port = pm.start_chain_simulator()
         .expect("Failed to start simulator");
+    let gateway_url = format!("http://localhost:{}", port);
     sleep(Duration::from_secs(2)).await;
 
-    let chain_id = get_simulator_chain_id().await;
+    let chain_id = get_simulator_chain_id(&gateway_url).await;
 
     // ── 2. Setup Wallets ──
     let sender_pk = generate_random_private_key();
@@ -94,14 +95,14 @@ async fn test_facilitator_extended() {
     let receiver_wallet = Wallet::from_private_key(&receiver_pk).unwrap();
     let receiver_bech32 = receiver_wallet.address().to_string();
 
-    fund_address_on_simulator(&sender_bech32, "1000000000000000000000").await;
+    fund_address_on_simulator(&sender_bech32, "1000000000000000000000", &gateway_url).await;
 
     // ── 3. Deploy Identity Registry + Register Agent with Service Config ──
     let pem_path = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("alice.pem");
     let alice_bech32 = "erd1qyu5wthldzr8wx5c9ucg8kjagg0jfs53s8nr3zpz3hypefsdd8ssycr6th";
-    fund_address_on_simulator(alice_bech32, "100000000000000000000000").await;
+    fund_address_on_simulator(alice_bech32, "100000000000000000000000", &gateway_url).await;
 
-    let mut interactor = Interactor::new(GATEWAY_URL).await.use_chain_simulator(true);
+    let mut interactor = Interactor::new(&gateway_url).await.use_chain_simulator(true);
     let alice_wallet = Wallet::from_pem_file(pem_path.to_str().unwrap()).expect("PEM load");
     let alice_addr = interactor.register_wallet(alice_wallet.clone()).await;
 
@@ -139,8 +140,8 @@ async fn test_facilitator_extended() {
         ("PORT", port_str.as_str()),
         ("PRIVATE_KEY", facilitator_pk.as_str()),
         ("REGISTRY_ADDRESS", registry_address.as_str()),
-        ("NETWORK_PROVIDER", GATEWAY_URL),
-        ("GATEWAY_URL", GATEWAY_URL),
+        ("NETWORK_PROVIDER", gateway_url.as_str()),
+        ("GATEWAY_URL", gateway_url.as_str()),
         ("CHAIN_ID", chain_id.as_str()),
         ("SQLITE_DB_PATH", db_path),
         ("SKIP_SIMULATION", "false"),

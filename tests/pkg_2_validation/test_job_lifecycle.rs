@@ -1,23 +1,23 @@
 use crate::common::{
-    create_pem_file, fund_address_on_simulator_custom, generate_random_private_key,
+    create_pem_file, fund_address_on_simulator, generate_random_private_key,
     IdentityRegistryInteractor, ValidationRegistryInteractor,
 };
 use multiversx_sc_snippets::imports::*;
 use mx_agentic_commerce_tests::ProcessManager;
 use tokio::time::{sleep, Duration};
 
-const GATEWAY_URL: &str = "http://localhost:8089";
 
 #[tokio::test]
 async fn test_job_lifecycle() {
     let mut process_manager = ProcessManager::new();
-    process_manager
-        .start_chain_simulator(8089)
+    let port = process_manager
+        .start_chain_simulator()
         .expect("Failed to start simulator");
+    let gateway_url = format!("http://localhost:{}", port);
 
     sleep(Duration::from_secs(3)).await;
 
-    let mut interactor = Interactor::new(GATEWAY_URL).await.use_chain_simulator(true);
+    let mut interactor = Interactor::new(&gateway_url).await.use_chain_simulator(true);
 
     // 1. Setup Wallet
     let owner_private_key = generate_random_private_key();
@@ -32,10 +32,10 @@ async fn test_job_lifecycle() {
     );
     interactor.register_wallet(owner_wallet.clone()).await;
 
-    fund_address_on_simulator_custom(
+    fund_address_on_simulator(
         &owner_address.to_bech32("erd").to_string(),
         "100000000000000000000000",
-        GATEWAY_URL,
+        &gateway_url,
     )
     .await;
 

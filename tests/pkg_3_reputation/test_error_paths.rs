@@ -6,7 +6,6 @@ use tokio::time::{sleep, Duration};
 use crate::common::{address_to_bech32, deploy_all_registries, fund_address_on_simulator};
 
 const GATEWAY_PORT: u16 = 8085;
-const GATEWAY_URL: &str = "http://localhost:8085";
 
 /// Returns (pm, interactor, reputation_addr, validation_addr, owner, employer, mallory)
 /// NOTE: pm MUST be kept alive for the duration of the test to prevent the simulator from being killed.
@@ -20,19 +19,20 @@ async fn setup_env() -> (
     Address,
 ) {
     let mut pm = ProcessManager::new();
-    pm.start_chain_simulator(GATEWAY_PORT)
+    let port = pm.start_chain_simulator()
         .expect("Failed to start simulator");
+    let gateway_url = format!("http://localhost:{}", port);
     sleep(Duration::from_secs(2)).await;
 
-    let mut interactor = Interactor::new(GATEWAY_URL).await.use_chain_simulator(true);
+    let mut interactor = Interactor::new(&gateway_url).await.use_chain_simulator(true);
 
     let owner = interactor.register_wallet(test_wallets::alice()).await;
     let employer = interactor.register_wallet(test_wallets::bob()).await;
     let mallory = interactor.register_wallet(test_wallets::carol()).await;
 
-    fund_address_on_simulator(&address_to_bech32(&owner), "100000000000000000000").await;
-    fund_address_on_simulator(&address_to_bech32(&employer), "100000000000000000000").await;
-    fund_address_on_simulator(&address_to_bech32(&mallory), "100000000000000000000").await;
+    fund_address_on_simulator(&address_to_bech32(&owner), "100000000000000000000", &gateway_url).await;
+    fund_address_on_simulator(&address_to_bech32(&employer), "100000000000000000000", &gateway_url).await;
+    fund_address_on_simulator(&address_to_bech32(&mallory), "100000000000000000000", &gateway_url).await;
 
     let (identity, validation_addr, reputation_addr) =
         deploy_all_registries(&mut interactor, owner.clone()).await;

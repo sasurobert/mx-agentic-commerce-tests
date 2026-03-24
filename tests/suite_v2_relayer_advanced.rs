@@ -4,7 +4,7 @@ use tokio::time::{sleep, Duration};
 mod common;
 use common::{
     address_to_bech32, fund_address_on_simulator, generate_blocks_on_simulator,
-    generate_random_private_key, get_simulator_chain_id, GATEWAY_URL,
+    generate_random_private_key, get_simulator_chain_id,
 };
 use multiversx_sc_snippets::imports::*;
 use mx_agentic_commerce_tests::ProcessManager;
@@ -22,17 +22,18 @@ async fn test_relayer_advanced() {
     let mut pm = ProcessManager::new();
 
     // ── 1. Start Chain Simulator ──
-    pm.start_chain_simulator(8085)
+    let port = pm.start_chain_simulator()
         .expect("Failed to start simulator");
+    let gateway_url = format!("http://localhost:{}", port);
     sleep(Duration::from_secs(2)).await;
 
-    let chain_id = get_simulator_chain_id().await;
-    let mut interactor = Interactor::new(GATEWAY_URL).await.use_chain_simulator(true);
+    let chain_id = get_simulator_chain_id(&gateway_url).await;
+    let mut interactor = Interactor::new(&gateway_url).await.use_chain_simulator(true);
 
     // ── 2. Setup ──
     let pem_path = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("alice.pem");
     let alice_bech32 = "erd1qyu5wthldzr8wx5c9ucg8kjagg0jfs53s8nr3zpz3hypefsdd8ssycr6th";
-    fund_address_on_simulator(alice_bech32, "100000000000000000000000").await;
+    fund_address_on_simulator(alice_bech32, "100000000000000000000000", &gateway_url).await;
 
     let alice_wallet = Wallet::from_pem_file(pem_path.to_str().unwrap()).expect("PEM load");
     let alice_addr = interactor.register_wallet(alice_wallet.clone()).await;
@@ -41,7 +42,7 @@ async fn test_relayer_advanced() {
         common::deploy_all_registries(&mut interactor, alice_addr.clone()).await;
 
     let identity_bech32 = address_to_bech32(identity.address());
-    generate_blocks_on_simulator(20).await;
+    generate_blocks_on_simulator(20, &gateway_url).await;
 
     // ── 3. Create Relayer Wallets Across Shards ──
     let relayer_wallets_dir = format!("{}/tmp_relayer_v2", env!("CARGO_MANIFEST_DIR"));
@@ -54,11 +55,11 @@ async fn test_relayer_advanced() {
     for i in 0..30 {
         let pk = generate_random_private_key();
         let wallet = Wallet::from_private_key(&pk).unwrap();
-        let bech32 = wallet.address().to_string();
+        let bech32 = wallet.to_address().to_bech32("erd").to_string();
 
         // Fund only first 9 wallets (3 per shard conceptually)
         if funded_count < 9 {
-            fund_address_on_simulator(&bech32, "5000000000000000000").await;
+            fund_address_on_simulator(&bech32, "5000000000000000000", &gateway_url).await;
             funded_count += 1;
         }
         // Don't fund the rest — they represent "exhausted" wallets
@@ -79,7 +80,7 @@ async fn test_relayer_advanced() {
         shard_wallets.push((bech32, pk));
     }
 
-    generate_blocks_on_simulator(15).await;
+    generate_blocks_on_simulator(15, &gateway_url).await;
 
     // ── 4. Start Relayer ──
     let port_str = RELAYER_PORT.to_string();
@@ -90,7 +91,7 @@ async fn test_relayer_advanced() {
         "dist/index.js",
         vec![
             ("PORT", port_str.as_str()),
-            ("NETWORK_PROVIDER", GATEWAY_URL),
+            ("NETWORK_PROVIDER", gateway_url.as_str()),
             ("IDENTITY_REGISTRY_ADDRESS", identity_bech32.as_str()),
             ("RELAYER_WALLETS_DIR", relayer_wallets_dir.as_str()),
             ("CHAIN_ID", chain_id.as_str()),
@@ -164,7 +165,7 @@ async fn test_relayer_advanced() {
             .arg("ts-node")
             .arg("scripts/register.ts")
             .env("MULTIVERSX_PRIVATE_KEY", &agent_pk)
-            .env("MULTIVERSX_API_URL", GATEWAY_URL)
+            .env("MULTIVERSX_API_URL", &gateway_url)
             .env("IDENTITY_REGISTRY_ADDRESS", &identity_bech32)
             .env("CHAIN_ID", &chain_id)
             .env("MULTIVERSX_RELAYER_URL", &relayer_url)
@@ -182,7 +183,7 @@ async fn test_relayer_advanced() {
         }
     }
 
-    generate_blocks_on_simulator(20).await;
+    generate_blocks_on_simulator(20, &gateway_url).await;
     println!(
         "  Exhaustion test: {} succeeded, {} failed",
         success_count, fail_count
@@ -206,16 +207,16 @@ async fn test_relayer_advanced() {
     // This verifies the ABI whitelisting in the relayer's skill execution
     let skill_agent_pk = generate_random_private_key();
     let skill_wallet = Wallet::from_private_key(&skill_agent_pk).unwrap();
-    let skill_bech32 = skill_wallet.address().to_string();
-    fund_address_on_simulator(&skill_bech32, "5000000000000000000").await;
-    generate_blocks_on_simulator(5).await;
+    let skill_bech32 = skill_wallet.to_address().to_bech32("erd").to_string();
+    fund_address_on_simulator(&skill_bech32, "5000000000000000000", &gateway_url).await;
+    generate_blocks_on_simulator(5, &gateway_url).await;
 
     // Direct registration to verify the skill's ABI execution through relayer
     let skill_reg = std::process::Command::new("npx")
         .arg("ts-node")
         .arg("scripts/register.ts")
         .env("MULTIVERSX_PRIVATE_KEY", &skill_agent_pk)
-        .env("MULTIVERSX_API_URL", GATEWAY_URL)
+        .env("MULTIVERSX_API_URL", &gateway_url)
         .env("IDENTITY_REGISTRY_ADDRESS", &identity_bech32)
         .env("CHAIN_ID", &chain_id)
         .env("MULTIVERSX_RELAYER_URL", &relayer_url)

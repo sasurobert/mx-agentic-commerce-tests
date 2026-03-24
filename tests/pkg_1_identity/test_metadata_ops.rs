@@ -1,5 +1,5 @@
 use crate::common::{
-    create_pem_file, fund_address_on_simulator_custom, generate_random_private_key,
+    create_pem_file, fund_address_on_simulator, generate_random_private_key,
     IdentityRegistryInteractor,
 };
 use identity_registry_interactor::identity_registry_proxy::IdentityRegistryProxy;
@@ -8,16 +8,18 @@ use multiversx_sc_snippets::imports::*;
 use mx_agentic_commerce_tests::ProcessManager;
 use tokio::time::{sleep, Duration};
 
-const GATEWAY_URL: &str = "http://localhost:8087";
 
 #[tokio::test]
 async fn test_metadata_ops() {
     let mut pm = ProcessManager::new();
-    pm.start_chain_simulator(8087)
+    let port = pm.start_chain_simulator()
         .expect("Failed to start simulator");
     sleep(Duration::from_secs(2)).await;
 
-    let mut interactor = Interactor::new(GATEWAY_URL).await.use_chain_simulator(true);
+    let gateway_url = format!("http://localhost:{}", port);
+
+
+    let mut interactor = Interactor::new(&gateway_url).await.use_chain_simulator(true);
 
     let alice_private_key = generate_random_private_key();
     let alice_wallet = Wallet::from_private_key(&alice_private_key).unwrap();
@@ -30,7 +32,7 @@ async fn test_metadata_ops() {
 
     interactor.register_wallet(alice_wallet.clone()).await;
     let wallet_bech32 = alice_address.to_bech32("erd").to_string();
-    fund_address_on_simulator_custom(&wallet_bech32, "100000000000000000000000", GATEWAY_URL).await;
+    fund_address_on_simulator(&wallet_bech32, "100000000000000000000000", &gateway_url).await;
 
     let mut identity_interactor =
         IdentityRegistryInteractor::init(&mut interactor, alice_address.clone()).await;

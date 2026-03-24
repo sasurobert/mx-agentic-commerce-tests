@@ -8,7 +8,7 @@ use tokio::time::{sleep, Duration};
 mod common;
 use common::{
     address_to_bech32, create_pem_file, fund_address_on_simulator, generate_blocks_on_simulator,
-    generate_random_private_key, IdentityRegistryInteractor, GATEWAY_URL,
+    generate_random_private_key, IdentityRegistryInteractor,
 };
 
 const RELAYER_PORT: u16 = 3003;
@@ -29,19 +29,20 @@ async fn test_relayed_moltbot_full_lifecycle() {
     let mut pm = ProcessManager::new();
 
     // 1. Infrastructure
-    pm.start_chain_simulator(8085).expect("Failed to start Sim");
+    let port = pm.start_chain_simulator().unwrap(); // .expect("Failed to start Sim");
+    let gateway_url = format!("http://localhost:{}", port);
     sleep(Duration::from_secs(2)).await;
 
-    let mut interactor = Interactor::new(GATEWAY_URL).await.use_chain_simulator(true);
+    let mut interactor = Interactor::new(&gateway_url).await.use_chain_simulator(true);
 
-    let chain_id = common::get_simulator_chain_id().await;
+    let chain_id = common::get_simulator_chain_id(&gateway_url).await;
     println!("Simulator ChainID: {}", chain_id);
 
     let admin = interactor.register_wallet(test_wallets::alice()).await;
 
     // Top up admin with 100,000 EGLD (chain sim initial balance is only ~10 EGLD)
     let admin_bech32 = address_to_bech32(&admin);
-    fund_address_on_simulator(&admin_bech32, "100000000000000000000000").await;
+    fund_address_on_simulator(&admin_bech32, "100000000000000000000000", &gateway_url).await;
     println!("Admin topped up with 100,000 EGLD");
 
     // 2. Deploy & Setup
@@ -51,7 +52,7 @@ async fn test_relayed_moltbot_full_lifecycle() {
     registry
         .issue_token(&mut interactor, "AgentNFT", "AGENTNFT")
         .await;
-    generate_blocks_on_simulator(20).await;
+    generate_blocks_on_simulator(20, &gateway_url).await;
     sleep(Duration::from_millis(500)).await;
 
     // Temp directories
@@ -86,11 +87,11 @@ async fn test_relayed_moltbot_full_lifecycle() {
     }
 
     // Ensure cross-shard EGLD transfers settle (30 wallets across 3 shards)
-    generate_blocks_on_simulator(30).await;
+    generate_blocks_on_simulator(30, &gateway_url).await;
 
     // 4. Start OpenClaw Relayer
     let relayer_env = vec![
-        ("NETWORK_PROVIDER", GATEWAY_URL),
+        ("NETWORK_PROVIDER", gateway_url.as_str()),
         ("IDENTITY_REGISTRY_ADDRESS", registry_addr.as_str()),
         ("RELAYER_WALLETS_DIR", relayer_wallets_dir.to_str().unwrap()),
         ("PORT", "3003"),
@@ -112,9 +113,9 @@ async fn test_relayed_moltbot_full_lifecycle() {
     let store_path = temp_dir.join("facilitator.db");
     let facilitator_env = vec![
         ("PORT", "3005"),
-        ("NETWORK_PROVIDER", GATEWAY_URL),
-        ("MULTIVERSX_API_URL", GATEWAY_URL),
-        ("MX_PROXY_URL", GATEWAY_URL),
+        ("NETWORK_PROVIDER", gateway_url.as_str()),
+        ("MULTIVERSX_API_URL", gateway_url.as_str()),
+        ("MX_PROXY_URL", gateway_url.as_str()),
         ("REGISTRY_ADDRESS", registry_addr.as_str()),
         ("CHAIN_ID", chain_id.as_str()),
         ("RELAYER_WALLETS_DIR", relayer_wallets_dir.to_str().unwrap()),
@@ -151,7 +152,7 @@ async fn test_relayed_moltbot_full_lifecycle() {
         .arg("register")
         .current_dir("../moltbot-starter-kit")
         .env("MULTIVERSX_PRIVATE_KEY", bot_pem.to_str().unwrap())
-        .env("MULTIVERSX_API_URL", GATEWAY_URL)
+        .env("MULTIVERSX_API_URL", &gateway_url)
         .env("IDENTITY_REGISTRY_ADDRESS", &registry_addr)
         .env("CHAIN_ID", &chain_id)
         .env("MULTIVERSX_CHAIN_ID", &chain_id)
@@ -175,7 +176,7 @@ async fn test_relayed_moltbot_full_lifecycle() {
     );
     println!("✅ Phase A: Bot registered via Relayer");
 
-    generate_blocks_on_simulator(30).await;
+    generate_blocks_on_simulator(30, &gateway_url).await;
     sleep(Duration::from_secs(1)).await;
 
     // ────────────────────────────────────
@@ -270,7 +271,7 @@ async fn test_relayed_moltbot_full_lifecycle() {
     // ────────────────────────────────────
     // VERIFICATION
     // ────────────────────────────────────
-    generate_blocks_on_simulator(10).await;
+    generate_blocks_on_simulator(10, &gateway_url).await;
     sleep(Duration::from_secs(2)).await;
 
     let events_res = client

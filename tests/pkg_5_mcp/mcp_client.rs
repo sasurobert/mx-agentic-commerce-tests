@@ -1,4 +1,3 @@
-use crate::common::GATEWAY_URL;
 use serde_json::{json, Value};
 use std::process::Stdio;
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
@@ -11,14 +10,15 @@ pub struct McpClient {
 }
 
 impl McpClient {
-    pub async fn new(chain_id: &str, pem_path: Option<&str>) -> Self {
-        Self::new_with_env(chain_id, pem_path, Vec::new()).await
+    pub async fn new(chain_id: &str, pem_path: Option<&str>, gateway_url: &str) -> Self {
+        Self::new_with_env(chain_id, pem_path, Vec::new(), gateway_url).await
     }
 
     pub async fn new_with_env(
         chain_id: &str,
         pem_path: Option<&str>,
         extra_env: Vec<(&str, &str)>,
+        gateway_url: &str,
     ) -> Self {
         let mcp_path = "dist/index.js";
         let working_dir = "../multiversx-mcp-server";
@@ -27,10 +27,9 @@ impl McpClient {
         cmd.arg(mcp_path)
             .arg("mcp")
             .current_dir(working_dir)
-            .env("MVX_API_URL", GATEWAY_URL)
+            .env("MVX_API_URL", gateway_url)
             .env("MVX_CHAIN_ID", chain_id)
-            .env("MVX_PK_HEX", "")
-            .env("MVX_API_URL", GATEWAY_URL);
+            .env("MVX_PK_HEX", "");
 
         if let Some(pem) = pem_path {
             cmd.env("MVX_WALLET_PEM", pem);

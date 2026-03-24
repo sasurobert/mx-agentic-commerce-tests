@@ -3,17 +3,18 @@ use multiversx_sc_snippets::imports::*;
 use mx_agentic_commerce_tests::ProcessManager;
 use tokio::time::{sleep, Duration};
 
-use crate::common::{deploy_all_registries, vm_query, GATEWAY_URL};
+use crate::common::{deploy_all_registries, vm_query};
 
 /// E2E-02: Agent A hires Agent B. Agent B does the work, submits proof, gets verified and rated.
 #[tokio::test]
 async fn test_agent_to_agent_hiring() {
     let mut pm = ProcessManager::new();
-    pm.start_chain_simulator(8085)
+    let port = pm.start_chain_simulator()
         .expect("Failed to start simulator");
+    let gateway_url = format!("http://localhost:{}", port);
     sleep(Duration::from_secs(2)).await;
 
-    let mut interactor = Interactor::new(GATEWAY_URL).await.use_chain_simulator(true);
+    let mut interactor = Interactor::new(&gateway_url).await.use_chain_simulator(true);
     interactor.generate_blocks_until_all_activations().await;
 
     let alice = interactor.register_wallet(test_wallets::alice()).await;

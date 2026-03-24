@@ -8,7 +8,7 @@ mod common;
 use common::{
     address_to_bech32, fund_address_on_simulator, generate_blocks_on_simulator,
     generate_random_private_key, get_simulator_chain_id, issue_fungible_esdt,
-    IdentityRegistryInteractor, ServiceConfigInput, GATEWAY_URL,
+    IdentityRegistryInteractor, ServiceConfigInput,
 };
 
 const FACILITATOR_PORT: u16 = 3075;
@@ -26,17 +26,18 @@ async fn test_facilitator_advanced() {
     let mut pm = ProcessManager::new();
 
     // ── 1. Start Chain Simulator ──
-    pm.start_chain_simulator(8085)
+    let port = pm.start_chain_simulator()
         .expect("Failed to start simulator");
+    let gateway_url = format!("http://localhost:{}", port);
     sleep(Duration::from_secs(2)).await;
 
-    let chain_id = get_simulator_chain_id().await;
-    let mut interactor = Interactor::new(GATEWAY_URL).await.use_chain_simulator(true);
+    let chain_id = get_simulator_chain_id(&gateway_url).await;
+    let mut interactor = Interactor::new(&gateway_url).await.use_chain_simulator(true);
 
     // ── 2. Setup Wallets ──
     let pem_path = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("alice.pem");
     let alice_bech32 = "erd1qyu5wthldzr8wx5c9ucg8kjagg0jfs53s8nr3zpz3hypefsdd8ssycr6th";
-    fund_address_on_simulator(alice_bech32, "100000000000000000000000").await;
+    fund_address_on_simulator(alice_bech32, "100000000000000000000000", &gateway_url).await;
 
     let alice_wallet = Wallet::from_pem_file(pem_path.to_str().unwrap()).expect("PEM load");
     let alice_addr = interactor.register_wallet(alice_wallet.clone()).await;
@@ -44,14 +45,14 @@ async fn test_facilitator_advanced() {
     let buyer_pk = generate_random_private_key();
     let buyer_wallet = Wallet::from_private_key(&buyer_pk).unwrap();
     let buyer_bech32 = buyer_wallet.address().to_string();
-    fund_address_on_simulator(&buyer_bech32, "1000000000000000000000").await;
+    fund_address_on_simulator(&buyer_bech32, "1000000000000000000000", &gateway_url).await;
 
     // ── 3. Deploy Identity Registry + Register Agent with Service Config ──
     let identity = IdentityRegistryInteractor::init(&mut interactor, alice_addr.clone()).await;
     identity
         .issue_token(&mut interactor, "AgentToken", "AGENT")
         .await;
-    generate_blocks_on_simulator(20).await;
+    generate_blocks_on_simulator(20, &gateway_url).await;
 
     // Register agent with price = 1 EGLD, service_id = 1
     let service = ServiceConfigInput {
@@ -83,8 +84,8 @@ async fn test_facilitator_advanced() {
         ("PRIVATE_KEY", facilitator_pk.as_str()),
         ("REGISTRY_ADDRESS", registry_address.as_str()),
         ("IDENTITY_REGISTRY_ADDRESS", registry_address.as_str()),
-        ("NETWORK_PROVIDER", GATEWAY_URL),
-        ("GATEWAY_URL", GATEWAY_URL),
+        ("NETWORK_PROVIDER", gateway_url.as_str()),
+        ("GATEWAY_URL", gateway_url.as_str()),
         ("CHAIN_ID", chain_id.as_str()),
         ("SQLITE_DB_PATH", db_path),
         ("SKIP_SIMULATION", "false"),
@@ -182,8 +183,8 @@ async fn test_facilitator_advanced() {
         ("PORT", sim_port_str.as_str()),
         ("PRIVATE_KEY", sim_facilitator_pk.as_str()),
         ("REGISTRY_ADDRESS", registry_address.as_str()),
-        ("NETWORK_PROVIDER", GATEWAY_URL),
-        ("GATEWAY_URL", GATEWAY_URL),
+        ("NETWORK_PROVIDER", gateway_url.as_str()),
+        ("GATEWAY_URL", gateway_url.as_str()),
         ("CHAIN_ID", chain_id.as_str()),
         ("SQLITE_DB_PATH", sim_db_path),
         // No SKIP_SIMULATION — simulation enabled
@@ -364,15 +365,16 @@ async fn test_facilitator_advanced() {
     println!("\n📋 Test 5: ESDT Settle (SFT/ESDT via /settle)");
 
     // Issue ESDT for buyer
-    generate_blocks_on_simulator(25).await;
+    generate_blocks_on_simulator(25, &gateway_url).await;
     let sender_sc_addr = interactor.register_wallet(buyer_wallet.clone()).await;
     let token_id = issue_fungible_esdt(
         &mut interactor,
-        &sender_sc_addr,
-        "FacToken",
-        "FACT",
-        1_000_000_000_000,
+        &alice_addr,
+        "FacilitatorToken2",
+        "FACT2",
+        1_000_000_000u128,
         6,
+        &gateway_url,
     )
     .await;
     println!("  Issued ESDT: {}", token_id);

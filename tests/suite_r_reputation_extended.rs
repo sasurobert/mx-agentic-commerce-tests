@@ -6,7 +6,7 @@ use tokio::time::{sleep, Duration};
 mod common;
 use common::{
     address_to_bech32, deploy_all_registries, generate_blocks_on_simulator,
-    IdentityRegistryInteractor, ValidationRegistryInteractor, GATEWAY_URL,
+    IdentityRegistryInteractor, ValidationRegistryInteractor,
 };
 
 /// Suite R: Reputation Registry Extended Tests
@@ -22,14 +22,15 @@ async fn test_reputation_extended_operations() {
     let mut pm = ProcessManager::new();
 
     // ── 1. Start Chain Simulator ──
-    pm.start_chain_simulator(8085)
+    let port = pm.start_chain_simulator()
         .expect("Failed to start simulator");
+    let gateway_url = format!("http://localhost:{}", port);
     sleep(Duration::from_secs(2)).await;
 
     // Generate 25 blocks to pass epoch 1
-    generate_blocks_on_simulator(25).await;
+    generate_blocks_on_simulator(25, &gateway_url).await;
 
-    let mut interactor = Interactor::new(GATEWAY_URL).await.use_chain_simulator(true);
+    let mut interactor = Interactor::new(&gateway_url).await.use_chain_simulator(true);
     let wallet_alice = interactor.register_wallet(test_wallets::alice()).await;
 
     // ── 2. Deploy all 3 registries ──
@@ -132,7 +133,7 @@ async fn test_reputation_extended_operations() {
         "args": [nonce_hex],
     });
     let resp_score: serde_json::Value = client
-        .post(format!("{}/vm-values/query", GATEWAY_URL))
+        .post(format!("{}/vm-values/query", gateway_url))
         .json(&body_score)
         .send()
         .await
@@ -171,7 +172,7 @@ async fn test_reputation_extended_operations() {
         "args": [nonce_hex],
     });
     let resp_total: serde_json::Value = client
-        .post(format!("{}/vm-values/query", GATEWAY_URL))
+        .post(format!("{}/vm-values/query", gateway_url))
         .json(&body_total)
         .send()
         .await
@@ -206,7 +207,7 @@ async fn test_reputation_extended_operations() {
         "args": [job_r1_hex],
     });
     let resp_feedback: serde_json::Value = client
-        .post(format!("{}/vm-values/query", GATEWAY_URL))
+        .post(format!("{}/vm-values/query", gateway_url))
         .json(&body_feedback)
         .send()
         .await
@@ -253,7 +254,7 @@ async fn test_reputation_extended_operations() {
         "args": [job_r1_hex],
     });
     let resp_resp: serde_json::Value = client
-        .post(format!("{}/vm-values/query", GATEWAY_URL))
+        .post(format!("{}/vm-values/query", gateway_url))
         .json(&body_resp)
         .send()
         .await

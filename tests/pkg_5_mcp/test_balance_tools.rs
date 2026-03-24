@@ -6,7 +6,7 @@ use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 use tokio::process::{ChildStdout, Command};
 use tokio::time::{sleep, Duration};
 
-use crate::common::{address_to_bech32, get_simulator_chain_id, GATEWAY_URL};
+use crate::common::{address_to_bech32, get_simulator_chain_id};
 
 async fn read_json_response(reader: &mut BufReader<ChildStdout>) -> String {
     let mut line = String::new();
@@ -30,18 +30,19 @@ async fn read_json_response(reader: &mut BufReader<ChildStdout>) -> String {
 #[tokio::test]
 async fn test_balance_tools() {
     let mut pm = ProcessManager::new();
-    pm.start_chain_simulator(8085)
+    let port = pm.start_chain_simulator()
         .expect("Failed to start simulator");
+    let gateway_url = format!("http://localhost:{}", port);
     sleep(Duration::from_secs(2)).await;
 
-    let mut interactor = Interactor::new(GATEWAY_URL).await.use_chain_simulator(true);
+    let mut interactor = Interactor::new(&gateway_url).await.use_chain_simulator(true);
     let wallet = interactor.register_wallet(test_wallets::alice()).await;
     let wallet_bech32 = address_to_bech32(&wallet);
 
     // Fund wallet
-    crate::common::fund_address_on_simulator(&wallet_bech32, "100000000000000000000").await; // 100 EGLD
+    crate::common::fund_address_on_simulator(&wallet_bech32, "100000000000000000000", &gateway_url).await; // 100 EGLD
 
-    let chain_id = get_simulator_chain_id().await;
+    let chain_id = get_simulator_chain_id(&gateway_url).await;
 
     // Start MCP Server process
     // Path relative to mx-agentic-commerce-tests root
@@ -52,7 +53,7 @@ async fn test_balance_tools() {
         .arg(mcp_path)
         .arg("mcp")
         .current_dir(working_dir)
-        .env("MULTIVERSX_API_URL", GATEWAY_URL)
+        .env("MULTIVERSX_API_URL", &gateway_url)
         .env("MULTIVERSX_CHAIN_ID", &chain_id)
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())

@@ -6,7 +6,7 @@ use rand::RngCore;
 use bech32::{self, Hrp, Bech32};
 
 mod common;
-use common::{IdentityRegistryInteractor, GATEWAY_URL};
+use common::{IdentityRegistryInteractor};
 
 const FACILITATOR_PORT: u16 = 3000;
 
@@ -27,11 +27,12 @@ async fn test_facilitator_flow() {
     let mut pm = ProcessManager::new();
     
     // 1. Start Chain Simulator
-    pm.start_chain_simulator(8085).expect("Failed to start simulator");
+    let port = pm.start_chain_simulator().unwrap(); // .expect("Failed to start simulator");
+    let gateway_url = format!("http://localhost:{}", port);
     sleep(Duration::from_secs(2)).await;
 
     // 2. Setup Interactor & Users
-    let mut interactor = Interactor::new(GATEWAY_URL).await
+    let mut interactor = Interactor::new(&gateway_url).await
         .use_chain_simulator(true);
     let wallet_alice = interactor.register_wallet(test_wallets::alice()).await;
     
@@ -58,15 +59,15 @@ async fn test_facilitator_flow() {
     println!("Registry Address: {}", registry_address);
 
     // 4. Start Facilitator
-    let chain_id = common::get_simulator_chain_id().await;
+    let chain_id = common::get_simulator_chain_id(&gateway_url).await;
     println!("Simulator ChainID: {}", chain_id);
 
     let env_vars = vec![
         ("PORT", "3000"),
         ("PRIVATE_KEY", facilitator_pk.as_str()),
         ("REGISTRY_ADDRESS", registry_address.as_str()),
-        ("NETWORK_PROVIDER", GATEWAY_URL), // CRITICAL FIX
-        ("GATEWAY_URL", GATEWAY_URL),
+        ("NETWORK_PROVIDER", gateway_url.as_str()),
+        ("GATEWAY_URL", gateway_url.as_str()),
         ("CHAIN_ID", chain_id.as_str()), // Simulator chain ID
     ];
     

@@ -1,6 +1,6 @@
 use crate::common::{
     create_pem_file, fund_address_on_simulator, generate_random_private_key,
-    IdentityRegistryInteractor, GATEWAY_URL,
+    IdentityRegistryInteractor,
 };
 use identity_registry_interactor::identity_registry_proxy::IdentityRegistryProxy;
 use multiversx_sc::types::{ManagedAddress, ManagedBuffer};
@@ -11,7 +11,7 @@ use tokio::time::{sleep, Duration};
 #[tokio::test]
 async fn test_views() {
     let mut pm = ProcessManager::new();
-    pm.start_chain_simulator(8089)
+    let port = pm.start_chain_simulator()
         .expect("Failed to start simulator");
     sleep(Duration::from_secs(3)).await;
 
@@ -30,9 +30,10 @@ async fn test_views() {
     );
     interactor.register_wallet(alice_wallet.clone()).await;
     fund_address_on_simulator(
-        &alice_address.to_bech32("erd").to_string(),
-        "100000000000000000000000",
-    )
+		&alice_address.to_bech32("erd").to_string(),
+		"100000000000000000000000",
+		&gateway_url,
+	)
     .await;
 
     // Deploy & Register

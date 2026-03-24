@@ -8,7 +8,7 @@ use tokio::time::{sleep, Duration};
 mod common;
 use common::{
     address_to_bech32, create_pem_file, generate_blocks_on_simulator, generate_random_private_key,
-    IdentityRegistryInteractor, GATEWAY_URL,
+    IdentityRegistryInteractor,
 };
 
 /// Suite E2: Moltbot direct update-manifest flow.
@@ -25,14 +25,15 @@ async fn test_moltbot_update_manifest() {
     let mut pm = ProcessManager::new();
 
     // 1. Start Chain Simulator
-    pm.start_chain_simulator(8085)
+    let port = pm.start_chain_simulator()
         .expect("Failed to start simulator");
+    let gateway_url = format!("http://localhost:{}", port);
     sleep(Duration::from_secs(2)).await;
 
-    let mut interactor = Interactor::new(GATEWAY_URL).await.use_chain_simulator(true);
+    let mut interactor = Interactor::new(&gateway_url).await.use_chain_simulator(true);
     let alice = interactor.register_wallet(test_wallets::alice()).await;
 
-    let chain_id = common::get_simulator_chain_id().await;
+    let chain_id = common::get_simulator_chain_id(&gateway_url).await;
     println!("Simulator ChainID: {}", chain_id);
 
     // 2. Deploy Identity Registry + Issue Token
@@ -43,7 +44,7 @@ async fn test_moltbot_update_manifest() {
     registry
         .issue_token(&mut interactor, "Agent", "AGENT")
         .await;
-    generate_blocks_on_simulator(20).await;
+    generate_blocks_on_simulator(20, &gateway_url).await;
     sleep(Duration::from_millis(500)).await;
 
     // 3. Setup Moltbot Wallet (FUNDED)
@@ -61,7 +62,7 @@ async fn test_moltbot_update_manifest() {
         .run()
         .await; // 2 EGLD for both txs
 
-    generate_blocks_on_simulator(10).await;
+    generate_blocks_on_simulator(10, &gateway_url).await;
 
     // Create PEM
     let project_root = std::env::current_dir().unwrap();
@@ -85,7 +86,7 @@ async fn test_moltbot_update_manifest() {
         .arg("register")
         .current_dir("../moltbot-starter-kit")
         .env("MULTIVERSX_PRIVATE_KEY", pem_path.to_str().unwrap())
-        .env("MULTIVERSX_API_URL", GATEWAY_URL)
+        .env("MULTIVERSX_API_URL", &gateway_url)
         .env("IDENTITY_REGISTRY_ADDRESS", &registry_address)
         .env("MULTIVERSX_CHAIN_ID", &chain_id)
         .stdout(Stdio::piped())
@@ -111,7 +112,7 @@ async fn test_moltbot_update_manifest() {
     );
     println!("✅ Registration SUCCESS");
 
-    generate_blocks_on_simulator(10).await;
+    generate_blocks_on_simulator(10, &gateway_url).await;
 
     // 5. Verify Registration On-Chain
     let client = reqwest::Client::new();
@@ -124,7 +125,7 @@ async fn test_moltbot_update_manifest() {
     });
 
     let vm_res = client
-        .post(format!("{}/vm-values/query", GATEWAY_URL))
+        .post(format!("{}/vm-values/query", gateway_url))
         .json(&vm_query)
         .send()
         .await
@@ -191,7 +192,7 @@ async fn test_moltbot_update_manifest() {
         .arg("update-manifest")
         .current_dir("../moltbot-starter-kit")
         .env("MULTIVERSX_PRIVATE_KEY", pem_path.to_str().unwrap())
-        .env("MULTIVERSX_API_URL", GATEWAY_URL)
+        .env("MULTIVERSX_API_URL", &gateway_url)
         .env("IDENTITY_REGISTRY_ADDRESS", &registry_address)
         .env("MULTIVERSX_CHAIN_ID", &chain_id)
         .stdout(Stdio::piped())
@@ -217,7 +218,7 @@ async fn test_moltbot_update_manifest() {
     );
     println!("✅ Update Manifest SUCCESS");
 
-    generate_blocks_on_simulator(10).await;
+    generate_blocks_on_simulator(10, &gateway_url).await;
 
     // 8. Verify Updated State On-Chain
     println!("\n═══ On-Chain Verification After Update ═══");
@@ -229,7 +230,7 @@ async fn test_moltbot_update_manifest() {
     });
 
     let vm_agent_res = client
-        .post(format!("{}/vm-values/query", GATEWAY_URL))
+        .post(format!("{}/vm-values/query", gateway_url))
         .json(&vm_agent_query)
         .send()
         .await

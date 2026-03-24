@@ -5,20 +5,19 @@ use tokio::time::{sleep, Duration};
 
 use crate::common::{
     address_to_bech32, deploy_all_registries, fund_address_on_simulator, ServiceConfigInput,
-    GATEWAY_URL,
 };
 
-const GATEWAY_PORT: u16 = 8085;
 
-async fn setup_env() -> (ProcessManager, Interactor, Address, Address, Address) {
+async fn setup_env() -> (ProcessManager, Interactor, Address, Address, Address, String) {
     let mut pm = ProcessManager::new();
-    pm.start_chain_simulator(GATEWAY_PORT)
+    let port = pm.start_chain_simulator()
         .expect("Failed to start simulator");
+    let gateway_url = format!("http://localhost:{}", port);
     sleep(Duration::from_secs(2)).await;
 
-    let mut interactor = Interactor::new(GATEWAY_URL).await.use_chain_simulator(true);
+    let mut interactor = Interactor::new(&gateway_url).await.use_chain_simulator(true);
     let owner = interactor.register_wallet(test_wallets::alice()).await;
-    fund_address_on_simulator(&address_to_bech32(&owner), "100000000000000000000").await;
+    fund_address_on_simulator(&address_to_bech32(&owner), "100000000000000000000", &gateway_url).await;
 
     let (mut identity, validation_addr, _) =
         deploy_all_registries(&mut interactor, owner.clone()).await;
@@ -39,15 +38,16 @@ async fn setup_env() -> (ProcessManager, Interactor, Address, Address, Address) 
         validation_addr,
         identity.address().clone(),
         owner,
+        gateway_url,
     )
 }
 
 #[tokio::test]
 #[should_panic(expected = "Insufficient payment")]
 async fn test_init_job_insufficient_payment() {
-    let (_pm, mut interactor, validation_addr, _, _) = setup_env().await;
+    let (_pm, mut interactor, validation_addr, _, _, gateway_url) = setup_env().await;
     let employer = interactor.register_wallet(test_wallets::bob()).await;
-    fund_address_on_simulator(&address_to_bech32(&employer), "100000000000000000000").await;
+    fund_address_on_simulator(&address_to_bech32(&employer), "100000000000000000000", &gateway_url).await;
 
     interactor
         .tx()
@@ -66,9 +66,9 @@ async fn test_init_job_insufficient_payment() {
 #[tokio::test]
 #[should_panic(expected = "Job already initialized")]
 async fn test_init_job_duplicate_id() {
-    let (_pm, mut interactor, validation_addr, _, _) = setup_env().await;
+    let (_pm, mut interactor, validation_addr, _, _, gateway_url) = setup_env().await;
     let employer = interactor.register_wallet(test_wallets::bob()).await;
-    fund_address_on_simulator(&address_to_bech32(&employer), "100000000000000000000").await;
+    fund_address_on_simulator(&address_to_bech32(&employer), "100000000000000000000", &gateway_url).await;
 
     // First init (success)
     interactor

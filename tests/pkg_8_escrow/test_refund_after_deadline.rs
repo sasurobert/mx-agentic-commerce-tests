@@ -1,5 +1,5 @@
 use crate::common::{
-    create_pem_file, fund_address_on_simulator_custom, generate_random_private_key,
+    create_pem_file, fund_address_on_simulator, generate_random_private_key,
     EscrowInteractor, EscrowStatus, IdentityRegistryInteractor, ValidationRegistryInteractor,
 };
 use multiversx_sc_snippets::imports::*;
@@ -7,18 +7,18 @@ use mx_agentic_commerce_tests::ProcessManager;
 use std::time::{SystemTime, UNIX_EPOCH};
 use tokio::time::{sleep, Duration};
 
-const GATEWAY_URL: &str = "http://localhost:8092";
 
 /// S-004: Deposit → deadline passes → refund → verify depositor refunded
 #[tokio::test]
 async fn test_escrow_refund_after_deadline() {
     let mut process_manager = ProcessManager::new();
-    process_manager
-        .start_chain_simulator(8092)
+    let port = process_manager
+        .start_chain_simulator()
         .expect("Failed to start simulator");
+    let gateway_url = format!("http://localhost:{}", port);
     sleep(Duration::from_secs(3)).await;
 
-    let mut interactor = Interactor::new(GATEWAY_URL).await.use_chain_simulator(true);
+    let mut interactor = Interactor::new(&gateway_url).await.use_chain_simulator(true);
 
     // 1. Setup
     let owner_key = generate_random_private_key();
@@ -38,10 +38,10 @@ async fn test_escrow_refund_after_deadline() {
     interactor.register_wallet(owner_wallet.clone()).await;
     interactor.register_wallet(receiver_wallet.clone()).await;
 
-    fund_address_on_simulator_custom(
+    fund_address_on_simulator(
         &owner_address.to_bech32("erd").to_string(),
         "100000000000000000000000",
-        GATEWAY_URL,
+        &gateway_url,
     )
     .await;
 
@@ -109,7 +109,7 @@ async fn test_escrow_refund_after_deadline() {
     //    Chain will be at ~now + 300 + 1200 = now + 1500 >> deadline (now + 600).
     let client = reqwest::Client::new();
     let _ = client
-        .post(format!("{}/simulator/generate-blocks/200", GATEWAY_URL))
+        .post(format!("{}/simulator/generate-blocks/200", gateway_url))
         .send()
         .await;
     sleep(Duration::from_millis(1000)).await;

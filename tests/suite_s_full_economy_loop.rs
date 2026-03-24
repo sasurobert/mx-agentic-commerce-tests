@@ -6,7 +6,7 @@ use tokio::time::{sleep, Duration};
 mod common;
 use common::{
     address_to_bech32, deploy_all_registries, generate_blocks_on_simulator,
-    IdentityRegistryInteractor, ServiceConfigInput, ValidationRegistryInteractor, GATEWAY_URL,
+    IdentityRegistryInteractor, ServiceConfigInput, ValidationRegistryInteractor,
 };
 
 /// Suite S: Full Agent Economy Loop
@@ -27,14 +27,15 @@ async fn test_full_agent_economy_loop() {
     let mut pm = ProcessManager::new();
 
     // ── 1. Start Chain Simulator ──
-    pm.start_chain_simulator(8085)
+    let port = pm.start_chain_simulator()
         .expect("Failed to start simulator");
+    let gateway_url = format!("http://localhost:{}", port);
     sleep(Duration::from_secs(2)).await;
 
     // Generate 25 blocks to pass epoch 1
-    generate_blocks_on_simulator(25).await;
+    generate_blocks_on_simulator(25, &gateway_url).await;
 
-    let mut interactor = Interactor::new(GATEWAY_URL).await.use_chain_simulator(true);
+    let mut interactor = Interactor::new(&gateway_url).await.use_chain_simulator(true);
     let wallet_alice = interactor.register_wallet(test_wallets::alice()).await;
     let wallet_bob = interactor.register_wallet(test_wallets::bob()).await;
     let alice_bech32 = address_to_bech32(&wallet_alice);
@@ -99,7 +100,7 @@ async fn test_full_agent_economy_loop() {
         "args": [nonce_hex, service_id_hex],
     });
     let resp_svc: serde_json::Value = client
-        .post(format!("{}/vm-values/query", GATEWAY_URL))
+        .post(format!("{}/vm-values/query", gateway_url))
         .json(&body_svc)
         .send()
         .await
@@ -142,7 +143,7 @@ async fn test_full_agent_economy_loop() {
         "args": [job_id_hex],
     });
     let resp_job: serde_json::Value = client
-        .post(format!("{}/vm-values/query", GATEWAY_URL))
+        .post(format!("{}/vm-values/query", gateway_url))
         .json(&body_job)
         .send()
         .await
@@ -216,7 +217,7 @@ async fn test_full_agent_economy_loop() {
         "args": [job_id_hex],
     });
     let resp_verified: serde_json::Value = client
-        .post(format!("{}/vm-values/query", GATEWAY_URL))
+        .post(format!("{}/vm-values/query", gateway_url))
         .json(&body_verified)
         .send()
         .await
@@ -260,7 +261,7 @@ async fn test_full_agent_economy_loop() {
         "args": [nonce_hex],
     });
     let resp_score: serde_json::Value = client
-        .post(format!("{}/vm-values/query", GATEWAY_URL))
+        .post(format!("{}/vm-values/query", gateway_url))
         .json(&body_score)
         .send()
         .await

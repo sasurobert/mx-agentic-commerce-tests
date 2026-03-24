@@ -6,17 +6,18 @@ use std::process::Command;
 use tokio::time::{sleep, Duration};
 
 use crate::common::{
-    address_to_bech32, generate_random_private_key, get_simulator_chain_id, GATEWAY_URL,
+    address_to_bech32, generate_random_private_key, get_simulator_chain_id,
 };
 
 #[tokio::test]
 async fn test_idempotency() {
     let mut pm = ProcessManager::new();
-    pm.start_chain_simulator(8085)
+    let sim_port = pm.start_chain_simulator()
         .expect("Failed to start simulator");
+    let gateway_url = format!("http://localhost:{}", sim_port);
 
     // Setup Facilitator
-    let chain_id = get_simulator_chain_id().await;
+    let chain_id = get_simulator_chain_id(&gateway_url).await;
     let facilitator_pk = generate_random_private_key();
     let port = 3061;
 
@@ -27,8 +28,8 @@ async fn test_idempotency() {
             "REGISTRY_ADDRESS",
             "erd1qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq6gq4hu",
         ),
-        ("NETWORK_PROVIDER", GATEWAY_URL),
-        ("GATEWAY_URL", GATEWAY_URL),
+        ("NETWORK_PROVIDER", gateway_url.as_str()),
+        ("GATEWAY_URL", gateway_url.as_str()),
         ("CHAIN_ID", chain_id.as_str()),
         ("SKIP_SIMULATION", "false"),
     ];
@@ -54,7 +55,7 @@ async fn test_idempotency() {
     let receiver_bech32 = receiver_wallet.address().to_string();
 
     // Fund sender
-    crate::common::fund_address_on_simulator(&sender_bech32, "1000000000000000000000").await; // 1000 EGLD
+    crate::common::fund_address_on_simulator(&sender_bech32, "1000000000000000000000", &gateway_url).await; // 1000 EGLD
 
     // 2. Sign Tx
     let value_str = "1000000000000000000"; // 1 EGLD
@@ -122,7 +123,7 @@ async fn test_idempotency() {
     assert_eq!(resp1_json["success"], true);
 
     // Wait for tx to be mined so nonce increments on chain
-    crate::common::generate_blocks_on_simulator(5).await;
+    crate::common::generate_blocks_on_simulator(5, &gateway_url).await;
     sleep(Duration::from_secs(3)).await;
 
     // 4. Second Settle (Replay) - Should Succeed Idempotently
@@ -151,7 +152,7 @@ async fn test_idempotency() {
     // 5. Verify Receiver Balance (Should be +1 EGLD, not +2)
     // Wait for blocks if needed, but if it returned generic success, we assume no new tx broadcast.
 
-    let account_url = format!("{}/address/{}", GATEWAY_URL, receiver_bech32);
+    let account_url = format!("{}/address/{}", gateway_url, receiver_bech32);
     let balance_resp = client
         .get(&account_url)
         .send()

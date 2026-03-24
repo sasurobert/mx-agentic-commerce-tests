@@ -10,8 +10,9 @@ use crate::common::{deploy_all_registries, vm_query, EscrowInteractor, EscrowSta
 #[tokio::test]
 async fn test_failure_refund_lifecycle() {
     let mut pm = ProcessManager::new();
-    pm.start_chain_simulator(8086)
+    let port = pm.start_chain_simulator()
         .expect("Failed to start simulator");
+    let gateway_url = format!("http://localhost:{}", port);
     sleep(Duration::from_secs(2)).await;
 
     let mut interactor = Interactor::new("http://localhost:8086")

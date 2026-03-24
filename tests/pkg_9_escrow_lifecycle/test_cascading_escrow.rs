@@ -3,7 +3,7 @@ use multiversx_sc_snippets::imports::*;
 use mx_agentic_commerce_tests::ProcessManager;
 use tokio::time::{sleep, Duration};
 
-use crate::common::{deploy_all_registries, vm_query, EscrowInteractor, EscrowStatus, GATEWAY_URL};
+use crate::common::{deploy_all_registries, vm_query, EscrowInteractor, EscrowStatus};
 
 /// T-003: Agent-to-Agent Cascading Escrow
 /// A hires B (escrow-ab), B sub-hires C (escrow-bc)
@@ -13,8 +13,9 @@ use crate::common::{deploy_all_registries, vm_query, EscrowInteractor, EscrowSta
 #[tokio::test]
 async fn test_cascading_escrow_chain() {
     let mut pm = ProcessManager::new();
-    pm.start_chain_simulator(8087)
+    let port = pm.start_chain_simulator()
         .expect("Failed to start simulator");
+    let gateway_url = format!("http://localhost:{}", port);
     sleep(Duration::from_secs(2)).await;
 
     let gateway = "http://localhost:8087";

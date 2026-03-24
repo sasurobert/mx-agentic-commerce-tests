@@ -8,7 +8,7 @@ use tokio::time::{sleep, Duration};
 mod common;
 use common::{
     address_to_bech32, create_pem_file, fund_address_on_simulator, generate_blocks_on_simulator,
-    generate_random_private_key, IdentityRegistryInteractor, GATEWAY_URL,
+    generate_random_private_key, IdentityRegistryInteractor,
 };
 
 const RELAYER_PORT: u16 = 3004;
@@ -24,16 +24,17 @@ async fn test_relayer_extended_operations() {
     let mut pm = ProcessManager::new();
 
     // ── 1. Start Chain Simulator ──
-    pm.start_chain_simulator(8085).expect("Failed to start Sim");
+    let port = pm.start_chain_simulator().unwrap(); // .expect("Failed to start Sim");
+    let gateway_url = format!("http://localhost:{}", port);
     sleep(Duration::from_secs(2)).await;
 
-    let mut interactor = Interactor::new(GATEWAY_URL).await.use_chain_simulator(true);
-    let chain_id = common::get_simulator_chain_id().await;
+    let mut interactor = Interactor::new(&gateway_url).await.use_chain_simulator(true);
+    let chain_id = common::get_simulator_chain_id(&gateway_url).await;
     println!("Simulator ChainID: {}", chain_id);
 
     let admin = interactor.register_wallet(test_wallets::alice()).await;
     let admin_bech32 = address_to_bech32(&admin);
-    fund_address_on_simulator(&admin_bech32, "100000000000000000000000").await;
+    fund_address_on_simulator(&admin_bech32, "100000000000000000000000", &gateway_url).await;
 
     // ── 2. Setup Relayer Wallets ──
     let project_root = std::env::current_dir().unwrap();
@@ -63,7 +64,7 @@ async fn test_relayer_extended_operations() {
         let relayer_pem = relayer_wallets_dir.join(format!("relayer_{}.pem", i));
         create_pem_file(relayer_pem.to_str().unwrap(), &relayer_pk, &relayer_addr);
     }
-    generate_blocks_on_simulator(30).await;
+    generate_blocks_on_simulator(30, &gateway_url).await;
     sleep(Duration::from_millis(500)).await;
 
     // ── 3. Deploy Identity Registry ──
@@ -74,16 +75,16 @@ async fn test_relayer_extended_operations() {
         registry
             .issue_token(&mut interactor, "AgentNFT", "AGENTNFT")
             .await;
-        generate_blocks_on_simulator(20).await;
+        generate_blocks_on_simulator(20, &gateway_url).await;
         sleep(Duration::from_secs(1)).await;
     }
 
-    generate_blocks_on_simulator(30).await;
+    generate_blocks_on_simulator(30, &gateway_url).await;
     sleep(Duration::from_millis(500)).await;
 
     // ── 4. Start Relayer ──
     let env = vec![
-        ("NETWORK_PROVIDER", GATEWAY_URL),
+        ("NETWORK_PROVIDER", gateway_url.as_str()),
         ("IDENTITY_REGISTRY_ADDRESS", registry_addr_bech32.as_str()),
         ("RELAYER_WALLETS_DIR", relayer_wallets_dir.to_str().unwrap()),
         ("PORT", "3004"),
@@ -130,7 +131,7 @@ async fn test_relayer_extended_operations() {
         .arg("register")
         .current_dir("../moltbot-starter-kit")
         .env("MULTIVERSX_PRIVATE_KEY", agent_pem_path.to_str().unwrap())
-        .env("MULTIVERSX_API_URL", GATEWAY_URL)
+        .env("MULTIVERSX_API_URL", &gateway_url)
         .env("IDENTITY_REGISTRY_ADDRESS", &registry_addr_bech32)
         .env("CHAIN_ID", &chain_id)
         .env("MULTIVERSX_CHAIN_ID", &chain_id)
@@ -145,7 +146,7 @@ async fn test_relayer_extended_operations() {
     assert!(output.status.success(), "Registration failed: {}", stdout);
     println!("✅ Agent registered via relayer");
 
-    generate_blocks_on_simulator(30).await;
+    generate_blocks_on_simulator(30, &gateway_url).await;
     sleep(Duration::from_secs(1)).await;
 
     // ── 6. TEST 2: update_agent via relayer (update manifest URI) ──
@@ -156,7 +157,7 @@ async fn test_relayer_extended_operations() {
         .arg("update")
         .current_dir("../moltbot-starter-kit")
         .env("MULTIVERSX_PRIVATE_KEY", agent_pem_path.to_str().unwrap())
-        .env("MULTIVERSX_API_URL", GATEWAY_URL)
+        .env("MULTIVERSX_API_URL", &gateway_url)
         .env("IDENTITY_REGISTRY_ADDRESS", &registry_addr_bech32)
         .env("CHAIN_ID", &chain_id)
         .env("MULTIVERSX_CHAIN_ID", &chain_id)
@@ -181,7 +182,7 @@ async fn test_relayer_extended_operations() {
         // Don't panic — report it. This confirms whether the gap is real or was fixed.
     }
 
-    generate_blocks_on_simulator(30).await;
+    generate_blocks_on_simulator(30, &gateway_url).await;
     sleep(Duration::from_secs(1)).await;
 
     // ── 7. TEST 3: Concurrent relayed registrations (3 agents simultaneously) ──
@@ -208,7 +209,7 @@ async fn test_relayer_extended_operations() {
                 .arg("register")
                 .current_dir("../moltbot-starter-kit")
                 .env("MULTIVERSX_PRIVATE_KEY", pem_path.to_str().unwrap())
-                .env("MULTIVERSX_API_URL", GATEWAY_URL)
+                .env("MULTIVERSX_API_URL", "http://localhost:0") // placeholder, relayer handles routing
                 .env("IDENTITY_REGISTRY_ADDRESS", &registry)
                 .env("CHAIN_ID", &cid)
                 .env("MULTIVERSX_CHAIN_ID", &cid)
@@ -242,7 +243,7 @@ async fn test_relayer_extended_operations() {
         }
     }
 
-    generate_blocks_on_simulator(30).await;
+    generate_blocks_on_simulator(30, &gateway_url).await;
     sleep(Duration::from_secs(1)).await;
 
     // At least 2 out of 3 should succeed (relayer may serialize nonce-sensitive requests)

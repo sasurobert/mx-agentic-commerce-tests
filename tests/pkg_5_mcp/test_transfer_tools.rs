@@ -1,6 +1,6 @@
 use crate::common::{
     address_to_bech32, fund_address_on_simulator, generate_random_private_key,
-    get_simulator_chain_id, GATEWAY_URL,
+    get_simulator_chain_id,
 };
 use base64::Engine;
 use multiversx_sc_snippets::imports::*;
@@ -10,12 +10,13 @@ use tokio::time::{sleep, Duration};
 #[tokio::test]
 async fn test_transfer_tools() {
     let mut pm = ProcessManager::new();
-    pm.start_chain_simulator(8085)
+    let port = pm.start_chain_simulator()
         .expect("Failed to start simulator");
+    let gateway_url = format!("http://localhost:{}", port);
     sleep(Duration::from_secs(2)).await;
 
-    let chain_id = get_simulator_chain_id().await;
-    let mut interactor = Interactor::new(GATEWAY_URL).await.use_chain_simulator(true);
+    let chain_id = get_simulator_chain_id(&gateway_url).await;
+    let mut interactor = Interactor::new(&gateway_url).await.use_chain_simulator(true);
 
     // CRITICAL: Activate all protocol features (including ESDT System SC)
     // Without this, ESDT issuance fails with "ESDT SC disabled"
@@ -28,7 +29,7 @@ async fn test_transfer_tools() {
     let alice_bech32 = address_to_bech32(&alice_addr);
 
     // Fund Alice
-    fund_address_on_simulator(&alice_bech32, "200000000000000000000").await; // 200 EGLD
+    fund_address_on_simulator(&alice_bech32, "200000000000000000000", &gateway_url).await; // 200 EGLD
 
     // 2. Create PEM file manually (Hex -> Base64 for SDK)
     let temp_pem_path = std::env::current_dir()
@@ -58,7 +59,7 @@ async fn test_transfer_tools() {
 
     // 3. Start MCP with Wallet
     let mut client =
-        crate::mcp_client::McpClient::new(&chain_id, Some(temp_pem_path.to_str().unwrap())).await;
+        crate::mcp_client::McpClient::new(&chain_id, Some(temp_pem_path.to_str().unwrap()), &gateway_url).await;
 
     // 4. Test send-egld
     println!("Testing send-egld...");
@@ -95,7 +96,7 @@ async fn test_transfer_tools() {
     let mut balance_found = false;
     for _ in 0..10 {
         let bob_acc_resp = client_http
-            .get(format!("{}/address/{}", GATEWAY_URL, bob_bech32))
+            .get(format!("{}/address/{}", gateway_url, bob_bech32))
             .send()
             .await;
         if let Ok(r) = bob_acc_resp {
@@ -148,7 +149,7 @@ async fn test_transfer_tools() {
 
     // Generate blocks & poll for token
     let mut token_id = String::new();
-    let alice_esdt_url = format!("{}/address/{}/esdt", GATEWAY_URL, alice_bech32);
+    let alice_esdt_url = format!("{}/address/{}/esdt", gateway_url, alice_bech32);
 
     for i in 0..20 {
         interactor.generate_blocks(1).await;
@@ -170,7 +171,7 @@ async fn test_transfer_tools() {
 
     if token_id.is_empty() {
         // Fetch tx result for debugging
-        let tx_url = format!("{}/transaction/{}?withResults=true", GATEWAY_URL, tx_hash);
+        let tx_url = format!("{}/transaction/{}?withResults=true", gateway_url, tx_hash);
         let tx_resp = client_http.get(&tx_url).send().await;
         if let Ok(r) = tx_resp {
             if let Ok(json) = r.json::<serde_json::Value>().await {
@@ -202,7 +203,7 @@ async fn test_transfer_tools() {
     assert!(text_token_res.contains("Transaction sent"));
 
     // Verify Bob token balance
-    let bob_esdt_url = format!("{}/address/{}/esdt/{}", GATEWAY_URL, bob_bech32, token_id);
+    let bob_esdt_url = format!("{}/address/{}/esdt/{}", gateway_url, bob_bech32, token_id);
 
     let mut token_found = false;
     for _ in 0..15 {
@@ -305,8 +306,7 @@ async fn test_transfer_tools() {
         // Check Alice's tokens for the new collection
         let resp_roles = client_http
             .get(format!(
-                "{}/address/{}/registered-nfts",
-                GATEWAY_URL, alice_bech32
+                "{}/address/{}/registered-nfts", gateway_url, alice_bech32
             ))
             .send()
             .await;
@@ -330,7 +330,7 @@ async fn test_transfer_tools() {
     if nft_collection_id.is_empty() {
         // Fallback: Check ESDTs endpoint
         let resp_esdt = client_http
-            .get(&format!("{}/address/{}/esdt", GATEWAY_URL, alice_bech32))
+            .get(&format!("{}/address/{}/esdt", gateway_url, alice_bech32))
             .send()
             .await;
         if let Ok(r) = resp_esdt {
@@ -367,8 +367,7 @@ async fn test_transfer_tools() {
 
         if !tx_hash_nft.is_empty() {
             let tx_url = format!(
-                "{}/transaction/{}?withResults=true",
-                GATEWAY_URL, tx_hash_nft
+                "{}/transaction/{}?withResults=true", gateway_url, tx_hash_nft
             );
             if let Ok(r) = client_http.get(&tx_url).send().await {
                 if let Ok(json) = r.json::<serde_json::Value>().await {
@@ -481,7 +480,7 @@ async fn test_transfer_tools() {
         sleep(Duration::from_millis(500)).await;
 
         let resp_esdt = client_http
-            .get(format!("{}/address/{}/esdt", GATEWAY_URL, alice_bech32))
+            .get(format!("{}/address/{}/esdt", gateway_url, alice_bech32))
             .send()
             .await;
         if let Ok(r) = resp_esdt {

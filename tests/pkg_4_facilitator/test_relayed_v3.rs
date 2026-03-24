@@ -1,6 +1,6 @@
 use crate::common::{
     create_pem_file, fund_address_on_simulator, generate_blocks_on_simulator,
-    generate_random_private_key, get_simulator_chain_id, GATEWAY_URL,
+    generate_random_private_key, get_simulator_chain_id,
 };
 use multiversx_sc_snippets::imports::*;
 use mx_agentic_commerce_tests::ProcessManager;
@@ -45,10 +45,11 @@ async fn test_relayed_v3_flow() {
     kill_port(FACILITATOR_PORT);
 
     let mut pm = ProcessManager::new();
-    let _ = pm.start_chain_simulator(8085);
+    let sim_port = pm.start_chain_simulator().unwrap();
+    let gateway_url = format!("http://localhost:{}", sim_port);
     sleep(Duration::from_secs(2)).await;
 
-    let mut interactor = Interactor::new(GATEWAY_URL).await.use_chain_simulator(true);
+    let mut interactor = Interactor::new(&gateway_url).await.use_chain_simulator(true);
 
     // 1. Setup Actors
     let sender_pk = generate_random_private_key();
@@ -62,7 +63,7 @@ async fn test_relayed_v3_flow() {
 
     // 2. Fund Sender
     println!("Funding Sender: {}", sender_address);
-    fund_address_on_simulator(&sender_address, "500000000000000000000").await; // 500 EGLD
+    fund_address_on_simulator(&sender_address, "500000000000000000000", &gateway_url).await; // 500 EGLD
 
     // 3. Generate multiple relayer wallets (covering all 3 shards)
     let project_root = std::env::current_dir().unwrap();
@@ -81,7 +82,7 @@ async fn test_relayed_v3_flow() {
         let ra = rw.to_address().to_bech32("erd").to_string();
 
         // Fund each relayer
-        fund_address_on_simulator(&ra, "1000000000000000000").await; // 1 EGLD
+        fund_address_on_simulator(&ra, "1000000000000000000", &gateway_url).await; // 1 EGLD
 
         let pem_path = format!("{}/relayer_{}.pem", relayer_wallets_dir_str, i);
         create_pem_file(&pem_path, &rk, &ra);
@@ -89,13 +90,13 @@ async fn test_relayed_v3_flow() {
     }
 
     // Ensure cross-shard funding is finalized
-    generate_blocks_on_simulator(5).await;
+    generate_blocks_on_simulator(5, &gateway_url).await;
 
     // 4. Start Facilitator with RELAYER_WALLETS_DIR
     let db_path = "./facilitator_relayed.db";
     let _ = std::fs::remove_file(db_path);
 
-    let chain_id = get_simulator_chain_id().await;
+    let chain_id = get_simulator_chain_id(&gateway_url).await;
 
     let facilitator_dir = std::path::Path::new("../x402_integration/x402_facilitator");
     let child = Command::new("npx")
@@ -108,8 +109,8 @@ async fn test_relayed_v3_flow() {
             "REGISTRY_ADDRESS",
             "erd1qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq6gq4hu",
         )
-        .env("NETWORK_PROVIDER", GATEWAY_URL)
-        .env("GATEWAY_URL", GATEWAY_URL)
+        .env("NETWORK_PROVIDER", &gateway_url)
+        .env("GATEWAY_URL", &gateway_url)
         .env("CHAIN_ID", &chain_id)
         .env("SQLITE_DB_PATH", db_path)
         .env("SKIP_SIMULATION", "false")
@@ -137,7 +138,7 @@ async fn test_relayed_v3_flow() {
     // 5. Wait for Epoch 1 (Relayed V3 enabled at epoch 1)
     // RoundsPerEpoch=20, so 25 blocks is enough
     println!("Waiting for Epoch 1 (generating 25 blocks)...");
-    generate_blocks_on_simulator(25).await;
+    generate_blocks_on_simulator(25, &gateway_url).await;
     sleep(Duration::from_secs(3)).await;
 
     // 6. Query facilitator for the correct shard-matched relayer address
@@ -246,11 +247,11 @@ async fn test_relayed_v3_flow() {
 
     // 11. Verify on-chain
     sleep(Duration::from_secs(2)).await;
-    generate_blocks_on_simulator(5).await;
+    generate_blocks_on_simulator(5, &gateway_url).await;
     sleep(Duration::from_secs(5)).await;
 
     // Check receiver balance
-    let account_url = format!("{}/address/{}", GATEWAY_URL, receiver_address);
+    let account_url = format!("{}/address/{}", gateway_url, receiver_address);
     let balance_resp = client
         .get(&account_url)
         .send()
@@ -262,7 +263,7 @@ async fn test_relayed_v3_flow() {
 
     // Sender should not have paid gas (relayer did)
     let sender_final_balance_resp = client
-        .get(format!("{}/address/{}", GATEWAY_URL, sender_address))
+        .get(format!("{}/address/{}", gateway_url, sender_address))
         .send()
         .await
         .unwrap();

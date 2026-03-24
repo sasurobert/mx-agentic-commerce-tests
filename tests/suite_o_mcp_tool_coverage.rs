@@ -8,7 +8,7 @@ use tokio::process::Command;
 use tokio::time::{sleep, Duration};
 
 mod common;
-use common::GATEWAY_URL;
+// use common::GATEWAY_URL;
 
 async fn read_json_response(reader: &mut BufReader<ChildStdout>) -> String {
     let mut line = String::new();
@@ -116,11 +116,12 @@ async fn test_mcp_tool_coverage() {
     let mut pm = ProcessManager::new();
 
     // ── 1. Start Chain Simulator ──
-    pm.start_chain_simulator(8085)
+    let port = pm.start_chain_simulator()
         .expect("Failed to start simulator");
+    let gateway_url = format!("http://localhost:{}", port);
     sleep(Duration::from_secs(2)).await;
 
-    let chain_id = common::get_simulator_chain_id().await;
+    let chain_id = common::get_simulator_chain_id(&gateway_url).await;
 
     // Use existing alice.pem from the test project root
     let pem_path = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("alice.pem");
@@ -132,7 +133,7 @@ async fn test_mcp_tool_coverage() {
         .arg("dist/index.js")
         .arg("mcp")
         .current_dir("../multiversx-mcp-server")
-        .env("MVX_API_URL", GATEWAY_URL)
+        .env("MVX_API_URL", &gateway_url)
         .env("MVX_NETWORK", "devnet")
         .env("MVX_WALLET_PEM", pem_path.to_str().unwrap())
         .stdin(Stdio::piped())

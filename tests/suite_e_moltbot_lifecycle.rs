@@ -8,7 +8,7 @@ use tokio::time::{sleep, Duration};
 mod common;
 use common::{
     address_to_bech32, create_pem_file, generate_blocks_on_simulator, generate_random_private_key,
-    IdentityRegistryInteractor, GATEWAY_URL,
+    IdentityRegistryInteractor,
 };
 
 /// Suite E: Moltbot direct registration (funded wallet, no relayer).
@@ -23,15 +23,16 @@ async fn test_moltbot_lifecycle() {
     let mut pm = ProcessManager::new();
 
     // 1. Start Chain Simulator
-    pm.start_chain_simulator(8085)
+    let port = pm.start_chain_simulator()
         .expect("Failed to start simulator");
+    let gateway_url = format!("http://localhost:{}", port);
     sleep(Duration::from_secs(2)).await;
 
     // 2. Setup Interactor & Admin
-    let mut interactor = Interactor::new(GATEWAY_URL).await.use_chain_simulator(true);
+    let mut interactor = Interactor::new(&gateway_url).await.use_chain_simulator(true);
     let alice = interactor.register_wallet(test_wallets::alice()).await;
 
-    let chain_id = common::get_simulator_chain_id().await;
+    let chain_id = common::get_simulator_chain_id(&gateway_url).await;
     println!("Simulator ChainID: {}", chain_id);
 
     // 3. Deploy Identity Registry + Issue Token
@@ -42,7 +43,7 @@ async fn test_moltbot_lifecycle() {
     registry
         .issue_token(&mut interactor, "Agent", "AGENT")
         .await;
-    generate_blocks_on_simulator(20).await;
+    generate_blocks_on_simulator(20, &gateway_url).await;
     sleep(Duration::from_millis(500)).await;
 
     // 4. Setup Moltbot Wallet (FUNDED — direct TX path)
@@ -61,7 +62,7 @@ async fn test_moltbot_lifecycle() {
         .await;
 
     // Ensure cross-shard funding is settled
-    generate_blocks_on_simulator(10).await;
+    generate_blocks_on_simulator(10, &gateway_url).await;
 
     // Create PEM file
     let project_root = std::env::current_dir().unwrap();
@@ -81,7 +82,7 @@ async fn test_moltbot_lifecycle() {
         .arg("register")
         .current_dir("../moltbot-starter-kit")
         .env("MULTIVERSX_PRIVATE_KEY", pem_path.to_str().unwrap())
-        .env("MULTIVERSX_API_URL", GATEWAY_URL)
+        .env("MULTIVERSX_API_URL", &gateway_url)
         .env("IDENTITY_REGISTRY_ADDRESS", &registry_address)
         .env("MULTIVERSX_CHAIN_ID", &chain_id)
         .stdout(Stdio::piped())
@@ -109,7 +110,7 @@ async fn test_moltbot_lifecycle() {
     println!("✅ register_agent broadcast SUCCESS (direct)");
 
     // Generate blocks to process the registration transaction
-    generate_blocks_on_simulator(10).await;
+    generate_blocks_on_simulator(10, &gateway_url).await;
 
     // 6. Verify On-Chain via vmQuery
     println!("\n═══ On-Chain Verification ═══");
@@ -123,7 +124,7 @@ async fn test_moltbot_lifecycle() {
     });
 
     let vm_res = client
-        .post(format!("{}/vm-values/query", GATEWAY_URL))
+        .post(format!("{}/vm-values/query", gateway_url))
         .json(&vm_query)
         .send()
         .await

@@ -1,6 +1,6 @@
 use crate::common::{
-    create_pem_file, fund_address_on_simulator_custom, generate_random_private_key,
-    IdentityRegistryInteractor, ServiceConfigInput, ValidationRegistryInteractor, GATEWAY_URL,
+    create_pem_file, fund_address_on_simulator, generate_random_private_key,
+    IdentityRegistryInteractor, ServiceConfigInput, ValidationRegistryInteractor,
 };
 use multiversx_sc::types::{BigUint, EgldOrEsdtTokenIdentifier, TokenIdentifier};
 use multiversx_sc_snippets::imports::*;
@@ -10,13 +10,14 @@ use tokio::time::{sleep, Duration};
 #[tokio::test]
 async fn test_job_with_payment() {
     let mut process_manager = ProcessManager::new();
-    process_manager
-        .start_chain_simulator(8085)
+    let port = process_manager
+        .start_chain_simulator()
         .expect("Failed to start simulator");
+    let gateway_url = format!("http://localhost:{}", port);
 
     sleep(Duration::from_secs(3)).await;
 
-    let mut interactor = Interactor::new(GATEWAY_URL).await.use_chain_simulator(true);
+    let mut interactor = Interactor::new(&gateway_url).await.use_chain_simulator(true);
 
     // 1. Setup Owner (contract deployer)
     let owner_private_key = generate_random_private_key();
@@ -31,10 +32,10 @@ async fn test_job_with_payment() {
     );
     interactor.register_wallet(owner_wallet.clone()).await;
 
-    fund_address_on_simulator_custom(
+    fund_address_on_simulator(
         &owner_address.to_bech32("erd").to_string(),
         "100000000000000000000000",
-        GATEWAY_URL,
+        &gateway_url,
     )
     .await;
 
@@ -81,14 +82,14 @@ async fn test_job_with_payment() {
     let employer_address = employer_wallet.to_address();
 
     // Fund employer
-    fund_address_on_simulator_custom(
+    fund_address_on_simulator(
         &employer_address.to_bech32("erd").to_string(),
         "50000000000000000000000", // 50,000 EGLD
-        GATEWAY_URL,
-    )
+        &gateway_url,
+        )
     .await;
 
-    let mut interactor_employer = Interactor::new(GATEWAY_URL).await.use_chain_simulator(true);
+    let mut interactor_employer = Interactor::new(&gateway_url).await.use_chain_simulator(true);
     interactor_employer
         .register_wallet(employer_wallet.clone())
         .await;

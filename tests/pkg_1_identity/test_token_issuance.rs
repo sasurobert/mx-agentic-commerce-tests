@@ -1,6 +1,6 @@
 use crate::common::{
     create_pem_file, fund_address_on_simulator, generate_random_private_key,
-    IdentityRegistryInteractor, GATEWAY_URL,
+    IdentityRegistryInteractor,
 };
 use identity_registry_interactor::identity_registry_proxy::IdentityRegistryProxy;
 use multiversx_sc::types::TokenIdentifier;
@@ -12,11 +12,14 @@ use tokio::time::{sleep, Duration};
 #[tokio::test]
 async fn test_token_issuance_happy_path() {
     let mut pm = ProcessManager::new();
-    pm.start_chain_simulator(8085)
+    let port = pm.start_chain_simulator()
         .expect("Failed to start simulator");
     sleep(Duration::from_secs(2)).await;
 
-    let mut interactor = Interactor::new(GATEWAY_URL).await.use_chain_simulator(true);
+    let gateway_url = format!("http://localhost:{}", port);
+
+
+    let mut interactor = Interactor::new(&gateway_url).await.use_chain_simulator(true);
 
     // Generate Alice wallet
     let alice_private_key = generate_random_private_key();
@@ -30,7 +33,7 @@ async fn test_token_issuance_happy_path() {
 
     interactor.register_wallet(alice_wallet.clone()).await;
     let wallet_bech32 = alice_address.to_bech32("erd").to_string();
-    fund_address_on_simulator(&wallet_bech32, "100000000000000000000000").await; // 100k EGLD
+    fund_address_on_simulator(&wallet_bech32, "100000000000000000000000", &gateway_url).await; // 100k EGLD
 
     // Deploy
     let mut identity_interactor =
@@ -61,11 +64,14 @@ async fn test_token_issuance_happy_path() {
 #[tokio::test]
 async fn test_token_issuance_errors() {
     let mut pm = ProcessManager::new();
-    pm.start_chain_simulator(8085)
+    let port = pm.start_chain_simulator()
         .expect("Failed to start simulator"); // Port config handling? Parallel tests?
     sleep(Duration::from_secs(2)).await;
 
-    let mut interactor = Interactor::new(GATEWAY_URL).await.use_chain_simulator(true);
+    let gateway_url = format!("http://localhost:{}", port);
+
+
+    let mut interactor = Interactor::new(&gateway_url).await.use_chain_simulator(true);
 
     // Generate Bob wallet
     let bob_private_key = generate_random_private_key();
@@ -79,7 +85,7 @@ async fn test_token_issuance_errors() {
 
     interactor.register_wallet(bob_wallet.clone()).await;
     let wallet_bech32 = bob_address.to_bech32("erd").to_string();
-    fund_address_on_simulator(&wallet_bech32, "100000000000000000000000").await;
+    fund_address_on_simulator(&wallet_bech32, "100000000000000000000000", &gateway_url).await;
 
     let mut identity_interactor =
         IdentityRegistryInteractor::init(&mut interactor, bob_address.clone()).await;

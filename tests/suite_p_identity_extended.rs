@@ -6,7 +6,7 @@ use tokio::time::{sleep, Duration};
 mod common;
 use common::{
     address_to_bech32, generate_blocks_on_simulator, IdentityRegistryInteractor,
-    ServiceConfigInput, GATEWAY_URL,
+    ServiceConfigInput,
 };
 
 /// Suite P: Identity Registry Extended Tests
@@ -23,14 +23,15 @@ async fn test_identity_extended_operations() {
     let mut pm = ProcessManager::new();
 
     // ── 1. Start Chain Simulator ──
-    pm.start_chain_simulator(8085)
+    let port = pm.start_chain_simulator()
         .expect("Failed to start simulator");
+    let gateway_url = format!("http://localhost:{}", port);
     sleep(Duration::from_secs(2)).await;
 
     // Generate 25 blocks to pass epoch 1
-    generate_blocks_on_simulator(25).await;
+    generate_blocks_on_simulator(25, &gateway_url).await;
 
-    let mut interactor = Interactor::new(GATEWAY_URL).await.use_chain_simulator(true);
+    let mut interactor = Interactor::new(&gateway_url).await.use_chain_simulator(true);
     let wallet_alice = interactor.register_wallet(test_wallets::alice()).await;
     let _alice_bech32 = address_to_bech32(&wallet_alice);
 
@@ -71,7 +72,7 @@ async fn test_identity_extended_operations() {
         "args": [nonce_hex],
     });
     let resp_owner: serde_json::Value = client
-        .post(format!("{}/vm-values/query", GATEWAY_URL))
+        .post(format!("{}/vm-values/query", gateway_url))
         .json(&body_owner)
         .send()
         .await
@@ -97,7 +98,7 @@ async fn test_identity_extended_operations() {
     });
 
     let resp_svc: serde_json::Value = client
-        .post(format!("{}/vm-values/query", GATEWAY_URL))
+        .post(format!("{}/vm-values/query", gateway_url))
         .json(&body_svc)
         .send()
         .await
@@ -144,7 +145,7 @@ async fn test_identity_extended_operations() {
         "args": [nonce_hex, service_id_2_hex],
     });
     let resp_svc2: serde_json::Value = client
-        .post(format!("{}/vm-values/query", GATEWAY_URL))
+        .post(format!("{}/vm-values/query", gateway_url))
         .json(&body_svc2)
         .send()
         .await
@@ -175,7 +176,7 @@ async fn test_identity_extended_operations() {
         "args": [nonce_hex, version_key_hex],
     });
     let resp_meta: serde_json::Value = client
-        .post(format!("{}/vm-values/query", GATEWAY_URL))
+        .post(format!("{}/vm-values/query", gateway_url))
         .json(&body_meta)
         .send()
         .await
@@ -202,7 +203,7 @@ async fn test_identity_extended_operations() {
         "args": [nonce_hex, type_key_hex],
     });
     let resp_type: serde_json::Value = client
-        .post(format!("{}/vm-values/query", GATEWAY_URL))
+        .post(format!("{}/vm-values/query", gateway_url))
         .json(&body_type)
         .send()
         .await
@@ -232,7 +233,7 @@ async fn test_identity_extended_operations() {
         "args": [nonce_hex, service_id_hex],
     });
     let resp_svc_removed: serde_json::Value = client
-        .post(format!("{}/vm-values/query", GATEWAY_URL))
+        .post(format!("{}/vm-values/query", gateway_url))
         .json(&body_svc_removed)
         .send()
         .await
@@ -261,7 +262,7 @@ async fn test_identity_extended_operations() {
         "args": [nonce_hex, service_id_2_hex],
     });
     let resp_svc2_check: serde_json::Value = client
-        .post(format!("{}/vm-values/query", GATEWAY_URL))
+        .post(format!("{}/vm-values/query", gateway_url))
         .json(&body_svc2_check)
         .send()
         .await

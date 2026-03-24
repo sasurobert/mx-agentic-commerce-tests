@@ -8,7 +8,7 @@ use tokio::process::Command;
 use tokio::time::{sleep, Duration};
 
 mod common;
-use common::{IdentityRegistryInteractor, GATEWAY_URL};
+use common::{IdentityRegistryInteractor};
 
 async fn read_json_response(reader: &mut BufReader<ChildStdout>) -> String {
     let mut line = String::new();
@@ -91,12 +91,13 @@ async fn test_mcp_agent_discovery() {
     let mut pm = ProcessManager::new();
 
     // ── 1. Start Chain Simulator ──
-    pm.start_chain_simulator(8085)
+    let port = pm.start_chain_simulator()
         .expect("Failed to start simulator");
+    let gateway_url = format!("http://localhost:{}", port);
     sleep(Duration::from_secs(2)).await;
 
     // ── 2. Deploy Identity Registry & Register Agents ──
-    let mut interactor = Interactor::new(GATEWAY_URL).await.use_chain_simulator(true);
+    let mut interactor = Interactor::new(&gateway_url).await.use_chain_simulator(true);
     let wallet_alice = interactor.register_wallet(test_wallets::alice()).await;
 
     // Generate and fund a second wallet for Agent #2
@@ -175,7 +176,7 @@ async fn test_mcp_agent_discovery() {
 
     println!("Registered Agent #2 (BetaBot) from Bob's wallet");
 
-    let chain_id = common::get_simulator_chain_id().await;
+    let chain_id = common::get_simulator_chain_id(&gateway_url).await;
     let registry_address = common::address_to_bech32(&registry_addr);
     println!("Registry Address: {}", registry_address);
 
@@ -183,7 +184,7 @@ async fn test_mcp_agent_discovery() {
     let client = reqwest::Client::new();
 
     // Query get_agent for nonce 1 (AlphaBot)
-    let query_url = format!("{}/vm-values/query", GATEWAY_URL);
+    let query_url = format!("{}/vm-values/query", gateway_url);
     let query_body = json!({
         "scAddress": registry_address,
         "funcName": "get_agent",
@@ -236,7 +237,7 @@ async fn test_mcp_agent_discovery() {
         .arg("dist/index.js")
         .arg("mcp")
         .current_dir("../multiversx-mcp-server")
-        .env("MVX_API_URL", GATEWAY_URL)
+        .env("MVX_API_URL", &gateway_url)
         .env("MVX_NETWORK", "devnet")
         .env("MVX_REGISTRY_IDENTITY", &registry_address)
         .stdin(Stdio::piped())

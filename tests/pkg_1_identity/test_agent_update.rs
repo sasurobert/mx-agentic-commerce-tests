@@ -1,7 +1,6 @@
 use crate::common::{
     create_pem_file, fund_address_on_simulator, generate_random_private_key,
     get_simulator_chain_id, IdentityRegistryInteractor, MetadataEntry, ServiceConfigInput,
-    GATEWAY_URL,
 };
 use identity_registry_interactor::identity_registry_proxy::IdentityRegistryProxy;
 use multiversx_sc::types::{BigUint, ManagedAddress, ManagedBuffer, TokenIdentifier};
@@ -12,11 +11,12 @@ use tokio::time::{sleep, Duration};
 #[tokio::test]
 async fn test_update_agent_full() {
     let mut pm = ProcessManager::new();
-    pm.start_chain_simulator(8085)
+    let port = pm.start_chain_simulator()
         .expect("Failed to start simulator");
     sleep(Duration::from_secs(2)).await;
+    let gateway_url = format!("http://localhost:{}", port);
 
-    let mut interactor = Interactor::new(GATEWAY_URL).await.use_chain_simulator(true);
+    let mut interactor = Interactor::new(&gateway_url).await.use_chain_simulator(true);
 
     // Alice setup
     let alice_private_key = generate_random_private_key();
@@ -30,7 +30,7 @@ async fn test_update_agent_full() {
 
     interactor.register_wallet(alice_wallet.clone()).await;
     let wallet_bech32 = alice_address.to_bech32("erd").to_string();
-    fund_address_on_simulator(&wallet_bech32, "100000000000000000000000").await;
+    fund_address_on_simulator(&wallet_bech32, "100000000000000000000000", &gateway_url).await;
 
     // Deploy & Issue & Register
     let mut identity_interactor =
@@ -85,11 +85,12 @@ async fn test_update_agent_full() {
 #[tokio::test]
 async fn test_update_agent_metadata() {
     let mut pm = ProcessManager::new();
-    pm.start_chain_simulator(8086)
+    let port = pm.start_chain_simulator()
         .expect("Failed to start simulator");
     sleep(Duration::from_secs(2)).await;
+    let gateway_url = format!("http://localhost:{}", port);
 
-    let mut interactor = Interactor::new("http://localhost:8086")
+    let mut interactor = Interactor::new(&gateway_url)
         .await
         .use_chain_simulator(true);
 
@@ -104,10 +105,10 @@ async fn test_update_agent_metadata() {
 
     interactor.register_wallet(alice_wallet.clone()).await;
     let wallet_bech32 = alice_address.to_bech32("erd").to_string();
-    crate::common::fund_address_on_simulator_custom(
+    crate::common::fund_address_on_simulator(
         &wallet_bech32,
         "100000000000000000000000",
-        "http://localhost:8086",
+        &gateway_url,
     )
     .await;
 

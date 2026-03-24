@@ -1,6 +1,6 @@
 use crate::common::{
     fund_address_on_simulator, generate_blocks_on_simulator, generate_random_private_key,
-    get_simulator_chain_id, issue_fungible_esdt, GATEWAY_URL,
+    get_simulator_chain_id, issue_fungible_esdt,
 };
 use multiversx_sc::types::Address;
 use multiversx_sc_snippets::imports::*;
@@ -13,10 +13,11 @@ const FACILITATOR_PORT: u16 = 3046;
 #[tokio::test]
 async fn test_settle_esdt() {
     let mut pm = ProcessManager::new();
-    let _ = pm.start_chain_simulator(8085);
+    let sim_port = pm.start_chain_simulator().unwrap();
+    let gateway_url = format!("http://localhost:{}", sim_port);
     sleep(Duration::from_secs(2)).await;
 
-    let mut interactor = Interactor::new(GATEWAY_URL).await.use_chain_simulator(true);
+    let mut interactor = Interactor::new(&gateway_url).await.use_chain_simulator(true);
 
     let sender_pk = generate_random_private_key();
     let sender_wallet = Wallet::from_private_key(&sender_pk).unwrap();
@@ -29,26 +30,27 @@ async fn test_settle_esdt() {
 
     // 1. Fund Sender (needs EGLD for issuance fees + gas)
     println!("Funding Sender: {}", sender_address);
-    fund_address_on_simulator(&sender_address, "500000000000000000000").await; // 500 EGLD
+    fund_address_on_simulator(&sender_address, "500000000000000000000", &gateway_url).await; // 500 EGLD
 
     // Advance past epoch 0 — ESDT system SC is disabled at epoch 0
     // RoundsPerEpoch = 20, so 25 blocks guarantees epoch >= 1
-    generate_blocks_on_simulator(25).await;
+    generate_blocks_on_simulator(25, &gateway_url).await;
 
     // 2. Issue ESDT
     let token_id = issue_fungible_esdt(
         &mut interactor,
         &sender_sc_address,
-        "TestToken",
-        "TEST",
-        1_000_000_000_000_000_000,
+        "FacilitatorToken",
+        "FACT",
+        1_000_000_000u128,
         6,
+        &gateway_url,
     )
     .await;
     println!("Issued Token: {}", token_id);
 
     // 3. Start Facilitator
-    let chain_id = get_simulator_chain_id().await;
+    let chain_id = get_simulator_chain_id(&gateway_url).await;
     let facilitator_pk = generate_random_private_key();
     let db_path = "./facilitator_esdt.db";
     let _ = std::fs::remove_file(db_path);
@@ -61,8 +63,8 @@ async fn test_settle_esdt() {
             "REGISTRY_ADDRESS",
             "erd1qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq6gq4hu",
         ),
-        ("NETWORK_PROVIDER", GATEWAY_URL),
-        ("GATEWAY_URL", GATEWAY_URL),
+        ("NETWORK_PROVIDER", gateway_url.as_str()),
+        ("GATEWAY_URL", gateway_url.as_str()),
         ("CHAIN_ID", chain_id.as_str()),
         ("SQLITE_DB_PATH", db_path),
         ("SKIP_SIMULATION", "false"),
@@ -172,13 +174,12 @@ async fn test_settle_esdt() {
     // 6. Generate Blocks & Verify
     // Wait for facilitator to broadcast
     sleep(Duration::from_secs(2)).await;
-    generate_blocks_on_simulator(5).await;
+    generate_blocks_on_simulator(5, &gateway_url).await;
     sleep(Duration::from_secs(5)).await;
 
     // Check Receiver ESDT Balance
     let account_url = format!(
-        "{}/address/{}/esdt/{}",
-        GATEWAY_URL, receiver_address, token_id
+        "{}/address/{}/esdt/{}", gateway_url, receiver_address, token_id
     );
     let balance_resp = client
         .get(&account_url)

@@ -9,7 +9,7 @@ use tokio::time::{sleep, Duration};
 mod common;
 use common::{
     address_to_bech32, create_pem_file, fund_address_on_simulator, generate_blocks_on_simulator,
-    generate_random_private_key, IdentityRegistryInteractor, GATEWAY_URL,
+    generate_random_private_key, IdentityRegistryInteractor,
 };
 
 const CHAIN_SIM_PORT: u16 = 8085;
@@ -21,22 +21,22 @@ const FACILITATOR_URL: &str = "http://localhost:3005";
 async fn test_multi_agent_payment_delegation() {
     let mut pm = ProcessManager::new();
 
-    // 1. Start Chain Simulator
-    pm.start_chain_simulator(CHAIN_SIM_PORT)
+    let port = pm.start_chain_simulator()
         .expect("Failed to start Sim");
+    let gateway_url = format!("http://localhost:{}", port);
     sleep(Duration::from_secs(2)).await;
 
     // 2. Setup Interactor & Wallets
-    let mut interactor = Interactor::new(SIM_URL).await.use_chain_simulator(true);
+    let mut interactor = Interactor::new(&gateway_url).await.use_chain_simulator(true);
 
-    let chain_id = common::get_simulator_chain_id().await;
+    let chain_id = common::get_simulator_chain_id(&gateway_url).await;
     println!("Simulator ChainID: {}", chain_id);
 
     let admin = interactor.register_wallet(test_wallets::alice()).await;
 
     // Top up admin with 100,000 EGLD (chain sim initial balance is only ~10 EGLD)
     let admin_bech32 = address_to_bech32(&admin);
-    fund_address_on_simulator(&admin_bech32, "100000000000000000000000").await;
+    fund_address_on_simulator(&admin_bech32, "100000000000000000000000", &gateway_url).await;
     println!("Admin topped up with 100,000 EGLD");
 
     let alice_pk = generate_random_private_key();
@@ -70,7 +70,7 @@ async fn test_multi_agent_payment_delegation() {
 
     // Wait for funding
     // Funding is sync in Interactor.run().await so we can proceed.
-    generate_blocks_on_simulator(10).await;
+    generate_blocks_on_simulator(10, &gateway_url).await;
     sleep(Duration::from_millis(500)).await;
 
     // Save PEM for signing scripts

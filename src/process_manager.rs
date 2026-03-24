@@ -1,46 +1,59 @@
 use std::net::TcpStream;
+use std::path::PathBuf;
 use std::process::{Child, Command, Stdio};
 use std::time::Duration;
-use std::path::PathBuf;
+
+use std::sync::atomic::{AtomicU16, Ordering};
+
+static NEXT_PORT: AtomicU16 = AtomicU16::new(8085);
 
 pub struct ProcessManager {
     children: Vec<Child>,
+    simulator_ports: Vec<u16>,
 }
 
 impl ProcessManager {
     pub fn new() -> Self {
         Self {
             children: Vec::new(),
+            simulator_ports: Vec::new(),
         }
     }
 
-    pub fn start_chain_simulator(&mut self, port: u16) -> Result<(), std::io::Error> {
+    pub fn start_chain_simulator(&mut self) -> Result<u16, std::io::Error> {
+        let port = NEXT_PORT.fetch_add(1, Ordering::SeqCst);
         println!("Starting Chain Simulator on port {}...", port);
-        
+
         let mut cmd_name = "mx-chain-simulator-go".to_string();
-        
+
         // Check common locations if not in PATH
-        if Command::new(&cmd_name).stdout(Stdio::null()).stderr(Stdio::null()).spawn().is_err() {
-             // Check common locations if not in PATH
-             if let Ok(cwd) = std::env::current_dir() {
-                 let local_bin = cwd.join("mx-chain-simulator-go");
-                 if local_bin.exists() {
-                     cmd_name = local_bin.to_string_lossy().to_string();
-                 } else {
-                     if let Ok(home) = std::env::var("HOME") {
+        if Command::new(&cmd_name)
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .spawn()
+            .is_err()
+        {
+            // Check common locations if not in PATH
+            if let Ok(cwd) = std::env::current_dir() {
+                let local_bin = cwd.join("mx-chain-simulator-go");
+                if local_bin.exists() {
+                    cmd_name = local_bin.to_string_lossy().to_string();
+                } else {
+                    if let Ok(home) = std::env::var("HOME") {
                         let go_bin = PathBuf::from(home).join("go/bin/mx-chain-simulator-go");
                         if go_bin.exists() {
                             cmd_name = go_bin.to_string_lossy().to_string();
                         }
-                     }
-                 }
-             }
+                    }
+                }
+            }
         }
 
         // Check if port is already listening (idempotent start)
         if TcpStream::connect(format!("127.0.0.1:{}", port)).is_ok() {
             println!("Chain Simulator already running on port {}.", port);
-            return Ok(());
+            self.simulator_ports.push(port);
+            return Ok(port);
         }
 
         let child = Command::new(&cmd_name)
@@ -58,9 +71,10 @@ impl ProcessManager {
             })?;
 
         self.children.push(child);
+        self.simulator_ports.push(port);
         self.wait_for_port(port, 120);
         println!("Chain Simulator started.");
-        Ok(())
+        Ok(port)
     }
 
     pub fn start_node_service(
@@ -110,25 +124,23 @@ impl Drop for ProcessManager {
             let _ = child.wait();
         }
 
-        // Kill any orphaned chain-simulator processes
-        let _ = Command::new("pkill")
-            .arg("-f")
-            .arg("mx-chain-simulator-go")
-            .stdout(Stdio::null())
-            .stderr(Stdio::null())
-            .status();
+        // Removed global pkill that breaks parallel tests
 
-        // Wait for port 8085 to be fully released (TIME_WAIT cleanup)
-        let port = 8085u16;
-        for i in 0..30 {
-            if TcpStream::connect(format!("127.0.0.1:{}", port)).is_err() {
-                if i > 0 {
-                    println!("Port {} released after {}ms.", port, i * 500);
+        // Wait for allocated ports to be fully released (TIME_WAIT cleanup)
+        for port in &self.simulator_ports {
+            let port = *port;
+            for i in 0..30 {
+                if TcpStream::connect(format!("127.0.0.1:{}", port)).is_err() {
+                    if i > 0 {
+                        println!("Port {} released after {}ms.", port, i * 500);
+                    }
+                    break;
                 }
-                return;
+                std::thread::sleep(Duration::from_millis(500));
             }
-            std::thread::sleep(Duration::from_millis(500));
+            if TcpStream::connect(format!("127.0.0.1:{}", port)).is_ok() {
+                println!("Warning: port {} still in use after 15s cleanup wait.", port);
+            }
         }
-        println!("Warning: port {} still in use after 15s cleanup wait.", port);
     }
 }

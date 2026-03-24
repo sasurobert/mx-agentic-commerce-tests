@@ -5,11 +5,11 @@ use serde_json::json;
 use tokio::time::{sleep, Duration};
 
 mod common;
-use common::{IdentityRegistryInteractor, GATEWAY_URL, REPUTATION_WASM_PATH, VALIDATION_WASM_PATH};
+use common::{IdentityRegistryInteractor, REPUTATION_WASM_PATH, VALIDATION_WASM_PATH};
 
 /// Query a contract view via the chain simulator VM query endpoint.
 /// Returns the decoded return data as a list of base64-decoded byte arrays.
-async fn vm_query(sc_address_bech32: &str, func_name: &str, args_hex: Vec<&str>) -> Vec<Vec<u8>> {
+async fn vm_query(sc_address_bech32: &str, func_name: &str, args_hex: Vec<&str>, gateway_url: &str) -> Vec<Vec<u8>> {
     let client = reqwest::Client::new();
     let body = json!({
         "scAddress": sc_address_bech32,
@@ -18,7 +18,7 @@ async fn vm_query(sc_address_bech32: &str, func_name: &str, args_hex: Vec<&str>)
     });
 
     let resp: serde_json::Value = client
-        .post(format!("{}/vm-values/query", GATEWAY_URL))
+        .post(format!("{}/vm-values/query", gateway_url))
         .json(&body)
         .send()
         .await
@@ -58,11 +58,12 @@ async fn test_reputation_validation_loop() {
     let mut pm = ProcessManager::new();
 
     // ── 1. Start Chain Simulator ──
-    pm.start_chain_simulator(8085)
+    let port = pm.start_chain_simulator()
         .expect("Failed to start simulator");
+    let gateway_url = format!("http://localhost:{}", port);
     sleep(Duration::from_secs(2)).await;
 
-    let mut interactor = Interactor::new(GATEWAY_URL).await.use_chain_simulator(true);
+    let mut interactor = Interactor::new(&gateway_url).await.use_chain_simulator(true);
     let wallet_alice = interactor.register_wallet(test_wallets::alice()).await;
     let _alice_bech32 = common::address_to_bech32(&wallet_alice);
 
@@ -237,7 +238,7 @@ async fn test_reputation_validation_loop() {
 
     // ── 11. Query Reputation Score via VM Query ──
     let nonce_hex = hex::encode(agent_nonce.to_be_bytes());
-    let result = vm_query(&reputation_bech32, "get_reputation_score", vec![&nonce_hex]).await;
+    let result = vm_query(&reputation_bech32, "get_reputation_score", vec![&nonce_hex], &gateway_url).await;
     assert!(!result.is_empty(), "Score query should return data");
 
     // Parse BigUint bytes as u64

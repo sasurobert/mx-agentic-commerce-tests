@@ -8,7 +8,6 @@ use std::process::Stdio;
 use tokio::process::ChildStdout;
 
 mod common;
-use common::GATEWAY_URL;
 
 async fn read_json_response(reader: &mut BufReader<ChildStdout>) -> String {
     let mut line = String::new();
@@ -29,10 +28,11 @@ async fn read_json_response(reader: &mut BufReader<ChildStdout>) -> String {
 #[tokio::test]
 async fn test_mcp_features() {
     let mut pm = ProcessManager::new();
-    pm.start_chain_simulator(8085).expect("Failed to start Sim");
+    let port = pm.start_chain_simulator().unwrap(); // .expect("Failed to start Sim");
+    let gateway_url = format!("http://localhost:{}", port);
     sleep(Duration::from_secs(2)).await;
 
-    let chain_id = common::get_simulator_chain_id().await;
+    let chain_id = common::get_simulator_chain_id(&gateway_url).await;
     println!("Simulator ChainID: {}", chain_id);
 
     println!("Starting MCP Server...");
@@ -40,7 +40,7 @@ async fn test_mcp_features() {
         .arg("dist/index.js")
         .arg("mcp")
         .current_dir("../multiversx-mcp-server")
-        .env("MULTIVERSX_API_URL", GATEWAY_URL)
+        .env("MULTIVERSX_API_URL", &gateway_url)
         .env("MULTIVERSX_CHAIN_ID", &chain_id)
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())

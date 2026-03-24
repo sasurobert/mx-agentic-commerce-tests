@@ -8,7 +8,7 @@ mod common;
 use common::{
     address_to_bech32, create_pem_file, fund_address_on_simulator, generate_blocks_on_simulator,
     generate_random_private_key, get_simulator_chain_id, IdentityRegistryInteractor,
-    ValidationRegistryInteractor, GATEWAY_URL,
+    ValidationRegistryInteractor,
 };
 
 const FACILITATOR_PORT: u16 = 3080;
@@ -29,29 +29,30 @@ async fn test_x402_lifecycle_with_proof() {
     let mut pm = ProcessManager::new();
 
     // ── 1. Start Chain Simulator ──
-    pm.start_chain_simulator(8085)
+    let port = pm.start_chain_simulator()
         .expect("Failed to start simulator");
+    let gateway_url = format!("http://localhost:{}", port);
     sleep(Duration::from_secs(2)).await;
 
-    let chain_id = get_simulator_chain_id().await;
+    let chain_id = get_simulator_chain_id(&gateway_url).await;
 
     // ── 2. Setup Wallets ──
-    let mut interactor = Interactor::new(GATEWAY_URL).await.use_chain_simulator(true);
+    let mut interactor = Interactor::new(&gateway_url).await.use_chain_simulator(true);
     let owner = interactor.register_wallet(test_wallets::alice()).await;
     let owner_bech32 = address_to_bech32(&owner);
-    fund_address_on_simulator(&owner_bech32, "100000000000000000000000").await;
+    fund_address_on_simulator(&owner_bech32, "100000000000000000000000", &gateway_url).await;
 
     let buyer_pk = generate_random_private_key();
     let buyer_wallet = Wallet::from_private_key(&buyer_pk).unwrap();
     let buyer_bech32 = buyer_wallet.address().to_string();
-    fund_address_on_simulator(&buyer_bech32, "1000000000000000000000").await;
+    fund_address_on_simulator(&buyer_bech32, "1000000000000000000000", &gateway_url).await;
 
     // ── 3. Deploy Identity + Validation Registries ──
     let identity = IdentityRegistryInteractor::init(&mut interactor, owner.clone()).await;
     identity
         .issue_token(&mut interactor, "AgentToken", "AGENT")
         .await;
-    generate_blocks_on_simulator(20).await;
+    generate_blocks_on_simulator(20, &gateway_url).await;
 
     let validation =
         ValidationRegistryInteractor::init(&mut interactor, owner.clone(), identity.address())
@@ -96,8 +97,8 @@ async fn test_x402_lifecycle_with_proof() {
         ("REGISTRY_ADDRESS", identity_bech32.as_str()),
         ("IDENTITY_REGISTRY_ADDRESS", identity_bech32.as_str()),
         ("VALIDATION_REGISTRY_ADDRESS", validation_bech32.as_str()),
-        ("NETWORK_PROVIDER", GATEWAY_URL),
-        ("GATEWAY_URL", GATEWAY_URL),
+        ("NETWORK_PROVIDER", gateway_url.as_str()),
+        ("GATEWAY_URL", gateway_url.as_str()),
         ("CHAIN_ID", chain_id.as_str()),
         ("SQLITE_DB_PATH", db_path),
         ("SKIP_SIMULATION", "false"),
@@ -200,7 +201,7 @@ async fn test_x402_lifecycle_with_proof() {
 
     // Generate blocks for settlement
     sleep(Duration::from_secs(1)).await;
-    generate_blocks_on_simulator(5).await;
+    generate_blocks_on_simulator(5, &gateway_url).await;
 
     // ── 10. Verify Job State ──
     // Query is_job_verified view
@@ -212,7 +213,7 @@ async fn test_x402_lifecycle_with_proof() {
     });
 
     let vm_res = client
-        .post(format!("{}/vm-values/query", GATEWAY_URL))
+        .post(format!("{}/vm-values/query", gateway_url))
         .json(&vm_query)
         .send()
         .await
@@ -234,7 +235,7 @@ async fn test_x402_lifecycle_with_proof() {
     });
 
     let vm_job_res = client
-        .post(format!("{}/vm-values/query", GATEWAY_URL))
+        .post(format!("{}/vm-values/query", gateway_url))
         .json(&vm_job_query)
         .send()
         .await

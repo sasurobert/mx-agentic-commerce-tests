@@ -12,15 +12,14 @@ pub use interactors::*;
 pub mod escrow_interactor;
 pub use escrow_interactor::*;
 
-pub const GATEWAY_URL: &str = "http://localhost:8085";
 pub const WASM_PATH: &str = "artifacts/identity-registry.wasm";
 pub const VALIDATION_WASM_PATH: &str = "artifacts/validation-registry.wasm";
 pub const REPUTATION_WASM_PATH: &str = "artifacts/reputation-registry.wasm";
 
-pub async fn get_simulator_chain_id() -> String {
+pub async fn get_simulator_chain_id(gateway_url: &str) -> String {
     let client = reqwest::Client::new();
     let resp: serde_json::Value = client
-        .get(format!("{}/network/config", GATEWAY_URL))
+        .get(format!("{}/network/config", gateway_url))
         .send()
         .await
         .expect("Failed to get network config")
@@ -38,7 +37,7 @@ pub async fn get_simulator_chain_id() -> String {
 /// This bypasses the initial wallet balance limits (typically ~10 EGLD).
 /// `balance_wei` should be the full balance in wei (e.g. "100000000000000000000000" for 100,000 EGLD).
 
-pub async fn fund_address_on_simulator(address_bech32: &str, balance_wei: &str) {
+pub async fn fund_address_on_simulator(address_bech32: &str, balance_wei: &str, gateway_url: &str) {
     let client = reqwest::Client::new();
     let body = serde_json::json!([{
         "address": address_bech32,
@@ -48,7 +47,7 @@ pub async fn fund_address_on_simulator(address_bech32: &str, balance_wei: &str) 
 
     for _ in 0..5 {
         let res = client
-            .post(format!("{}/simulator/set-state", GATEWAY_URL))
+            .post(format!("{}/simulator/set-state", gateway_url))
             .json(&body)
             .send()
             .await;
@@ -72,45 +71,49 @@ pub async fn fund_address_on_simulator(address_bech32: &str, balance_wei: &str) 
     panic!("Failed to set state on simulator after retries");
 }
 
-/// Fund an address on the chain simulator using a custom gateway URL.
-pub async fn fund_address_on_simulator_custom(
-    address_bech32: &str,
-    balance_wei: &str,
-    gateway_url: &str,
-) {
-    let client = reqwest::Client::new();
-    let body = serde_json::json!([{
-        "address": address_bech32,
-        "balance": balance_wei,
-        "nonce": 0
-    }]);
-    let res = client
-        .post(format!("{}/simulator/set-state", gateway_url))
-        .json(&body)
-        .send()
-        .await
-        .expect("Failed to set state on simulator");
-    assert!(
-        res.status().is_success(),
-        "set-state failed: {}",
-        res.text().await.unwrap_or_default()
-    );
-}
-
 /// Generate blocks on the chain simulator (needed when broadcasting
 /// via external services like relayer/facilitator, since `interactor.tx().run()`
 /// auto-generates blocks but HTTP broadcasts don't).
-pub async fn generate_blocks_on_simulator(num_blocks: u32) {
+pub async fn generate_blocks_on_simulator(num_blocks: u32, gateway_url: &str) {
     let client = reqwest::Client::new();
     let res = client
         .post(format!(
             "{}/simulator/generate-blocks/{}",
-            GATEWAY_URL, num_blocks
+            gateway_url, num_blocks
         ))
         .send()
         .await
         .expect("Failed to generate blocks on simulator");
     assert!(res.status().is_success(), "generate-blocks failed");
+}
+
+/// Force-set the block timestamp on all shards of the chain simulator.
+/// This avoids generating thousands of blocks just to advance time.
+/// `timestamp_seconds` is the Unix timestamp in seconds.
+pub async fn force_set_block_timestamp(gateway_url: &str, timestamp_seconds: u64) {
+    let client = reqwest::Client::new();
+    // Set on all shards (0, 1, 2) and metachain (4294967295)
+    for shard in &[0u32, 1, 2, 4294967295] {
+        let body = serde_json::json!({
+            "timestamp": timestamp_seconds,
+        });
+        let res = client
+            .post(format!(
+                "{}/simulator/set-current-block-info?shard={}",
+                gateway_url, shard
+            ))
+            .json(&body)
+            .send()
+            .await
+            .expect("Failed to set block timestamp on simulator");
+        assert!(
+            res.status().is_success(),
+            "set-current-block-info failed for shard {}",
+            shard
+        );
+    }
+    // Generate 1 block to commit the new timestamp
+    generate_blocks_on_simulator(1, gateway_url).await;
 }
 
 use rand::RngCore;
@@ -859,6 +862,7 @@ pub async fn issue_fungible_esdt(
     ticker: &str,
     supply: u128,
     decimals: usize,
+    gateway_url: &str,
 ) -> String {
     issue_fungible_esdt_custom(
         interactor,
@@ -867,7 +871,7 @@ pub async fn issue_fungible_esdt(
         ticker,
         supply,
         decimals,
-        GATEWAY_URL,
+        gateway_url,
     )
     .await
 }

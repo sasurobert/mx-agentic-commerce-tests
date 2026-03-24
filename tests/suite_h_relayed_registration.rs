@@ -6,18 +6,19 @@ use tokio::time::{sleep, Duration};
 mod common;
 use common::{
     address_to_bech32, create_pem_file, generate_blocks_on_simulator, generate_random_private_key,
-    IdentityRegistryInteractor, GATEWAY_URL,
+    IdentityRegistryInteractor,
 };
 
 #[tokio::test]
 async fn test_relayed_registration() {
     let mut pm = ProcessManager::new();
-    pm.start_chain_simulator(8085).expect("Failed to start Sim");
+    let port = pm.start_chain_simulator().unwrap(); // .expect("Failed to start Sim");
+    let gateway_url = format!("http://localhost:{}", port);
     sleep(Duration::from_secs(2)).await;
 
-    let mut interactor = Interactor::new(GATEWAY_URL).await.use_chain_simulator(true);
+    let mut interactor = Interactor::new(&gateway_url).await.use_chain_simulator(true);
 
-    let chain_id = common::get_simulator_chain_id().await;
+    let chain_id = common::get_simulator_chain_id(&gateway_url).await;
     println!("Simulator ChainID: {}", chain_id);
 
     let alice = interactor.register_wallet(test_wallets::alice()).await;
@@ -64,11 +65,11 @@ async fn test_relayed_registration() {
     }
 
     // Ensure cross-shard EGLD transfers to relayer wallets are finalized
-    generate_blocks_on_simulator(10).await;
+    generate_blocks_on_simulator(10, &gateway_url).await;
 
     // Start Relayer Service
     let env = vec![
-        ("NETWORK_PROVIDER", GATEWAY_URL),
+        ("NETWORK_PROVIDER", gateway_url.as_str()),
         ("IDENTITY_REGISTRY_ADDRESS", registry_addr.as_str()),
         ("RELAYER_WALLETS_DIR", relayer_wallets_dir.to_str().unwrap()),
         ("PORT", "3003"), // Different port
@@ -104,7 +105,7 @@ async fn test_relayed_registration() {
         .arg("register")
         .current_dir("../moltbot-starter-kit")
         .env("MULTIVERSX_PRIVATE_KEY", moltbot_pem.to_str().unwrap())
-        .env("MULTIVERSX_API_URL", GATEWAY_URL)
+        .env("MULTIVERSX_API_URL", &gateway_url)
         .env("IDENTITY_REGISTRY_ADDRESS", &registry_addr)
         .env("CHAIN_ID", &chain_id)
         .env("MULTIVERSX_CHAIN_ID", &chain_id)
@@ -121,7 +122,7 @@ async fn test_relayed_registration() {
     assert!(output.status.success(), "Registration script failed");
 
     // Generate blocks so the chain simulator processes the relayed transaction
-    generate_blocks_on_simulator(5).await;
+    generate_blocks_on_simulator(5, &gateway_url).await;
 
     let stdout = String::from_utf8_lossy(&output.stdout);
     assert!(

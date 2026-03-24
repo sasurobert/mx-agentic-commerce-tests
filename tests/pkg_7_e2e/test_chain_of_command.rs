@@ -3,18 +3,19 @@ use multiversx_sc_snippets::imports::*;
 use mx_agentic_commerce_tests::ProcessManager;
 use tokio::time::{sleep, Duration};
 
-use crate::common::{deploy_all_registries, vm_query, GATEWAY_URL};
+use crate::common::{deploy_all_registries, vm_query};
 
 /// E2E-06: Chain of Command — Agent A hires Agent B, who sub-hires Agent C.
 /// Tests multi-level delegation: A→B→C, each with separate job tracking and reputation.
 #[tokio::test]
 async fn test_chain_of_command() {
     let mut pm = ProcessManager::new();
-    pm.start_chain_simulator(8085)
+    let port = pm.start_chain_simulator()
         .expect("Failed to start simulator");
+    let gateway_url = format!("http://localhost:{}", port);
     sleep(Duration::from_secs(2)).await;
 
-    let mut interactor = Interactor::new(GATEWAY_URL).await.use_chain_simulator(true);
+    let mut interactor = Interactor::new(&gateway_url).await.use_chain_simulator(true);
     interactor.generate_blocks_until_all_activations().await;
 
     let alice = interactor.register_wallet(test_wallets::alice()).await;

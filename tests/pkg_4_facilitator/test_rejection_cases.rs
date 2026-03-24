@@ -6,17 +6,18 @@ use std::process::Command;
 use tokio::time::{sleep, Duration};
 
 use crate::common::{
-    address_to_bech32, generate_random_private_key, get_simulator_chain_id, GATEWAY_URL,
+    address_to_bech32, generate_random_private_key, get_simulator_chain_id,
 };
 
 #[tokio::test]
 async fn test_rejection_cases() {
     let mut pm = ProcessManager::new();
-    pm.start_chain_simulator(8085)
+    let sim_port = pm.start_chain_simulator()
         .expect("Failed to start simulator");
+    let gateway_url = format!("http://localhost:{}", sim_port);
 
     // Setup Facilitator
-    let chain_id = get_simulator_chain_id().await;
+    let chain_id = get_simulator_chain_id(&gateway_url).await;
     let facilitator_pk = generate_random_private_key();
     let port = 3060;
 
@@ -27,8 +28,8 @@ async fn test_rejection_cases() {
             "REGISTRY_ADDRESS",
             "erd1qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq6gq4hu",
         ),
-        ("NETWORK_PROVIDER", GATEWAY_URL),
-        ("GATEWAY_URL", GATEWAY_URL),
+        ("NETWORK_PROVIDER", gateway_url.as_str()),
+        ("GATEWAY_URL", gateway_url.as_str()),
         ("CHAIN_ID", chain_id.as_str()),
         ("SKIP_SIMULATION", "false"),
     ];
@@ -54,7 +55,7 @@ async fn test_rejection_cases() {
     let receiver_bech32 = receiver_wallet.address().to_string();
 
     // Fund sender
-    crate::common::fund_address_on_simulator(&sender_bech32, "1000000000000000000000").await; // 1000 EGLD
+    crate::common::fund_address_on_simulator(&sender_bech32, "1000000000000000000000", &gateway_url).await; // 1000 EGLD
 
     // 2. Create Valid Signed Tx
     let value_str = "1000000000000000000"; // 1 EGLD

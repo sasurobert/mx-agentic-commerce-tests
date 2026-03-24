@@ -1,23 +1,23 @@
 use crate::common::{
-    create_pem_file, fund_address_on_simulator_custom, generate_random_private_key,
+    create_pem_file, fund_address_on_simulator, generate_random_private_key,
     EscrowInteractor, IdentityRegistryInteractor, ValidationRegistryInteractor,
 };
 use multiversx_sc_snippets::imports::*;
 use mx_agentic_commerce_tests::ProcessManager;
 use tokio::time::{sleep, Duration};
 
-const GATEWAY_URL: &str = "http://localhost:8093";
 
 /// S-005: Deposit → unauthorized release attempt → expect error
 #[tokio::test]
 async fn test_escrow_unauthorized_release() {
     let mut process_manager = ProcessManager::new();
-    process_manager
-        .start_chain_simulator(8093)
+    let port = process_manager
+        .start_chain_simulator()
         .expect("Failed to start simulator");
+    let gateway_url = format!("http://localhost:{}", port);
     sleep(Duration::from_secs(3)).await;
 
-    let mut interactor = Interactor::new(GATEWAY_URL).await.use_chain_simulator(true);
+    let mut interactor = Interactor::new(&gateway_url).await.use_chain_simulator(true);
 
     // 1. Setup: owner deposits, attacker tries to release
     let owner_key = generate_random_private_key();
@@ -42,16 +42,16 @@ async fn test_escrow_unauthorized_release() {
     interactor.register_wallet(attacker_wallet.clone()).await;
     interactor.register_wallet(receiver_wallet.clone()).await;
 
-    fund_address_on_simulator_custom(
+    fund_address_on_simulator(
         &owner_address.to_bech32("erd").to_string(),
         "100000000000000000000000",
-        GATEWAY_URL,
+        &gateway_url,
     )
     .await;
-    fund_address_on_simulator_custom(
+    fund_address_on_simulator(
         &attacker_address.to_bech32("erd").to_string(),
         "10000000000000000000",
-        GATEWAY_URL,
+        &gateway_url,
     )
     .await;
 

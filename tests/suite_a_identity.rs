@@ -8,17 +8,17 @@ use tokio::time::{sleep, Duration};
 #[path = "common/mod.rs"]
 mod test_utils;
 use ::common::{MetadataEntry, ServiceConfigInput};
-use test_utils::GATEWAY_URL;
+
 
 #[tokio::test]
 async fn test_identity_registry_flow() {
     let mut pm = ProcessManager::new();
-    pm.start_chain_simulator(8085)
+    let port = pm.start_chain_simulator()
         .expect("Failed to start simulator");
-
+    let gateway_url = format!("http://localhost:{}", port);
     sleep(Duration::from_secs(2)).await;
 
-    let mut interactor = Interactor::new(GATEWAY_URL).await.use_chain_simulator(true);
+    let mut interactor = Interactor::new(&gateway_url).await.use_chain_simulator(true);
 
     let wallet_alice = interactor.register_wallet(test_wallets::alice()).await;
 

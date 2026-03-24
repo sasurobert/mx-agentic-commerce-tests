@@ -1,6 +1,6 @@
 use crate::common::{
     create_pem_file, fund_address_on_simulator, generate_random_private_key,
-    IdentityRegistryInteractor, GATEWAY_URL,
+    IdentityRegistryInteractor,
 };
 use identity_registry_interactor::identity_registry_proxy::IdentityRegistryProxy;
 use multiversx_sc::types::{ManagedBuffer, TokenIdentifier};
@@ -11,11 +11,12 @@ use tokio::time::{sleep, Duration};
 #[tokio::test]
 async fn test_error_paths() {
     let mut pm = ProcessManager::new();
-    pm.start_chain_simulator(8085)
+    let port = pm.start_chain_simulator()
         .expect("Failed to start simulator");
     sleep(Duration::from_secs(3)).await;
+    let gateway_url = format!("http://localhost:{}", port);
 
-    let mut interactor = Interactor::new(GATEWAY_URL).await.use_chain_simulator(true);
+    let mut interactor = Interactor::new(&gateway_url).await.use_chain_simulator(true);
 
     // Setup Alice (Admin/Owner)
     let alice_private_key = generate_random_private_key();
@@ -28,9 +29,10 @@ async fn test_error_paths() {
     );
     interactor.register_wallet(alice_wallet.clone()).await;
     fund_address_on_simulator(
-        &alice_address.to_bech32("erd").to_string(),
-        "100000000000000000000000",
-    )
+		&alice_address.to_bech32("erd").to_string(),
+		"100000000000000000000000",
+		&gateway_url,
+	)
     .await;
 
     // Setup Bob (Attacker)
@@ -39,9 +41,10 @@ async fn test_error_paths() {
     let bob_address = bob_wallet.to_address();
     interactor.register_wallet(bob_wallet.clone()).await;
     fund_address_on_simulator(
-        &bob_address.to_bech32("erd").to_string(),
-        "100000000000000000000000",
-    )
+		&bob_address.to_bech32("erd").to_string(),
+		"100000000000000000000000",
+		&gateway_url,
+	)
     .await;
 
     // Deploy contract
