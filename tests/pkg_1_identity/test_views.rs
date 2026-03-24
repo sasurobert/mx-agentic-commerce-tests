@@ -13,9 +13,10 @@ async fn test_views() {
     let mut pm = ProcessManager::new();
     let port = pm.start_chain_simulator()
         .expect("Failed to start simulator");
+    let gateway_url = format!("http://localhost:{}", port);
     sleep(Duration::from_secs(3)).await;
 
-    let mut interactor = Interactor::new("http://localhost:8089")
+    let mut interactor = Interactor::new(&gateway_url)
         .await
         .use_chain_simulator(true);
 
@@ -30,10 +31,10 @@ async fn test_views() {
     );
     interactor.register_wallet(alice_wallet.clone()).await;
     fund_address_on_simulator(
-		&alice_address.to_bech32("erd").to_string(),
-		"100000000000000000000000",
-		&gateway_url,
-	)
+        &alice_address.to_bech32("erd").to_string(),
+        "100000000000000000000000",
+        &gateway_url,
+    )
     .await;
 
     // Deploy & Register

@@ -18,8 +18,7 @@ async fn test_cascading_escrow_chain() {
     let gateway_url = format!("http://localhost:{}", port);
     sleep(Duration::from_secs(2)).await;
 
-    let gateway = "http://localhost:8087";
-    let mut interactor = Interactor::new(gateway).await.use_chain_simulator(true);
+    let mut interactor = Interactor::new(&gateway_url).await.use_chain_simulator(true);
 
     let alice = interactor.register_wallet(test_wallets::alice()).await;
     let bob = interactor.register_wallet(test_wallets::bob()).await;

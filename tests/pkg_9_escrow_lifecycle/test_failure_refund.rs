@@ -15,7 +15,7 @@ async fn test_failure_refund_lifecycle() {
     let gateway_url = format!("http://localhost:{}", port);
     sleep(Duration::from_secs(2)).await;
 
-    let mut interactor = Interactor::new("http://localhost:8086")
+    let mut interactor = Interactor::new(&gateway_url)
         .await
         .use_chain_simulator(true);
     let owner = interactor.register_wallet(test_wallets::alice()).await;
@@ -89,7 +89,7 @@ async fn test_failure_refund_lifecycle() {
     // 6. Advance time past deadline (200 blocks × 6s = 1200s >> 600s deadline)
     let client = reqwest::Client::new();
     let _ = client
-        .post("http://localhost:8086/simulator/generate-blocks/200")
+        .post(format!("{}/simulator/generate-blocks/200", gateway_url))
         .send()
         .await;
     sleep(Duration::from_millis(1000)).await;
