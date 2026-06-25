@@ -1,4 +1,3 @@
-use bech32;
 use multiversx_sc_snippets::imports::*;
 use mx_agentic_commerce_tests::ProcessManager;
 use serde_json::{json, Value};
@@ -8,12 +7,11 @@ use tokio::time::{sleep, Duration};
 
 mod common;
 use common::{
-    address_to_bech32, create_pem_file, fund_address_on_simulator, generate_blocks_on_simulator,
-    generate_random_private_key,
+    wait_for_simulator_ready,
+    address_to_bech32, create_temp_pem_file, fund_address_on_simulator, generate_blocks_on_simulator,
+    generate_random_private_key, mpp_facilitator_available, start_mpp_facilitator,
+    MPP_FACILITATOR_CWD,
 };
-
-const MPP_PORT: u16 = 3006;
-const MPP_URL: &str = "http://localhost:3006";
 
 /// Suite Z: MPP Facilitator Relayed V3 tests
 ///
@@ -29,12 +27,19 @@ const MPP_URL: &str = "http://localhost:3006";
 ///   6. Verify on-chain payment
 #[tokio::test]
 async fn test_relayed_mpp_facilitator() {
+    if !mpp_facilitator_available() {
+        println!(
+            "Skipping: mpp-facilitator-mvx not available at {MPP_FACILITATOR_CWD} (clone sibling repo, npm install, npm run build)"
+        );
+        return;
+    }
+
     let mut pm = ProcessManager::new();
 
     // 1. Start Chain Simulator
     let port = pm.start_chain_simulator().unwrap(); // .expect("Failed to start Sim");
     let gateway_url = format!("http://localhost:{}", port);
-    sleep(Duration::from_secs(2)).await;
+    wait_for_simulator_ready(&gateway_url).await;
 
     let mut interactor = Interactor::new(&gateway_url).await.use_chain_simulator(true);
 
@@ -45,12 +50,13 @@ async fn test_relayed_mpp_facilitator() {
     let admin_bech32 = address_to_bech32(&admin);
     fund_address_on_simulator(&admin_bech32, "100000000000000000000000", &gateway_url).await; 
 
-    // 2. Setup Alice's wallet (which is used as Relayer by mpp-facilitator-mvx defaults)
+    // 2. Setup relayer wallet (facilitator now requires RELAYER_PEM_PATH)
     let project_root = std::env::current_dir().unwrap();
-    let alice_pem_path = project_root.join("alice.pem");
-    let alice_wallet = Wallet::from_pem_file(&alice_pem_path.to_str().unwrap()).unwrap();
-    let relayer_sc_addr = Address::from_slice(alice_wallet.to_address().as_bytes());
+    let relayer_pk = generate_random_private_key();
+    let relayer_wallet = Wallet::from_private_key(&relayer_pk).unwrap();
+    let relayer_sc_addr = Address::from_slice(relayer_wallet.to_address().as_bytes());
     let relayer_bech32 = address_to_bech32(&relayer_sc_addr);
+    let relayer_pem = create_temp_pem_file("suite_z_relayer", &relayer_pk, &relayer_bech32);
 
     // Fund relayer
     interactor
@@ -66,16 +72,14 @@ async fn test_relayed_mpp_facilitator() {
     // ────────────────────────────────────────────
     
     // Both Sender and Relayer must be in the same shard for Relayed V3!
-    let relayer_pk_last_byte = alice_wallet.to_address().as_bytes()[31];
-    let mut bob_pk = String::new();
-    let mut bob_wallet;
-    loop {
-        bob_pk = generate_random_private_key();
-        bob_wallet = Wallet::from_private_key(&bob_pk).unwrap();
+    let relayer_pk_last_byte = relayer_sc_addr.as_bytes()[31];
+    let (bob_pk, bob_wallet) = loop {
+        let bob_pk = generate_random_private_key();
+        let bob_wallet = Wallet::from_private_key(&bob_pk).unwrap();
         if bob_wallet.to_address().as_bytes()[31] == relayer_pk_last_byte {
-            break;
+            break (bob_pk, bob_wallet);
         }
-    }
+    };
     let bob_addr = address_to_bech32(&bob_wallet.to_address());
     let bob_sc_addr = Address::from_slice(bob_wallet.to_address().as_bytes());
     
@@ -96,31 +100,28 @@ async fn test_relayed_mpp_facilitator() {
     }
     fs::create_dir_all(&temp_dir).unwrap();
 
-    let bob_pem = temp_dir.join("bob.pem");
-    create_pem_file(bob_pem.to_str().unwrap(), &bob_pk, &bob_addr);
+    let bob_pem = create_temp_pem_file("bob", &bob_pk, &bob_addr);
     let bob_pem_abs = fs::canonicalize(&bob_pem).expect("Failed to canonicalize");
 
     // 3. Start MPP Facilitator
-    let env = vec![
-        ("PORT", "3006"),
-        ("NETWORK_PROVIDER", gateway_url.as_str()),
-        ("MPP_SECRET_KEY", "test-secret-key-12345678901234567890123456789012"),
-    ];
-
-    pm.start_node_service(
-        "MppFacilitator",
-        "../mpp-facilitator-mvx",
-        "dist/main.js",
-        env,
-        MPP_PORT,
+    let mpp_url = start_mpp_facilitator(
+        &mut pm,
+        &gateway_url,
+        &chain_id,
+        &[
+            (
+                "MPP_SECRET_KEY",
+                "test-secret-key-12345678901234567890123456789012",
+            ),
+            ("RELAYER_PEM_PATH", relayer_pem.as_str()),
+        ],
     )
-    .expect("Failed to start MPP Facilitator");
-    sleep(Duration::from_secs(3)).await;
+    .await;
 
     // Verify relayer address via endpoint
     let client = reqwest::Client::new();
     let relayer_addr_res = client
-        .get(format!("{}/relayer_address", MPP_URL))
+        .get(format!("{}/relayer_address", mpp_url))
         .send()
         .await
         .expect("Failed to get relayer address");
@@ -165,14 +166,14 @@ async fn test_relayed_mpp_facilitator() {
     // Generating blocks to advance epoch because Relayed V3 transactions might be disabled on Epoch 0 in chain simulator
     println!("Advancing epoch to enable Relayed V3 on chain simulator...");
     common::generate_blocks_on_simulator(50, &gateway_url).await;
-    sleep(Duration::from_secs(2)).await;
+    wait_for_simulator_ready(&gateway_url).await;
 
     // ────────────────────────────────────────────
     // 5. CALL /submit_relayed_v3 WITH THE RELAYED PAYLOAD
     // ────────────────────────────────────────────
     let submit_req = json!(payload_json);
     let res = client
-        .post(format!("{}/submit_relayed_v3", MPP_URL))
+        .post(format!("{}/submit_relayed_v3", mpp_url))
         .json(&submit_req)
         .send()
         .await
@@ -186,7 +187,7 @@ async fn test_relayed_mpp_facilitator() {
     
     // Wait for block to produce
     generate_blocks_on_simulator(5, &gateway_url).await;
-    sleep(Duration::from_secs(2)).await;
+    wait_for_simulator_ready(&gateway_url).await;
 
     // 6. Verify Charlie received EGLD
     let charlie_acc_final = interactor.get_account(&charlie_sc_addr).await;
@@ -199,6 +200,6 @@ async fn test_relayed_mpp_facilitator() {
     );
 
     // Cleanup
-    let _ = fs::remove_dir_all(&temp_dir);
+    fs::remove_dir_all(&temp_dir).ok();
     println!("✅ MPP Facilitator Relayed V3 passed!");
 }

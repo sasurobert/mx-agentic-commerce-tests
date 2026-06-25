@@ -1,60 +1,27 @@
-use crate::common::{
-    create_pem_file, fund_address_on_simulator, generate_random_private_key,
+use crate::common::{TestEnv,
     IdentityRegistryInteractor,
 };
-use identity_registry_interactor::identity_registry_proxy::IdentityRegistryProxy;
-use multiversx_sc::types::{ManagedBuffer, TokenIdentifier};
+use multiversx_sc::types::ManagedBuffer;
 use multiversx_sc_snippets::imports::*;
-use mx_agentic_commerce_tests::ProcessManager;
-use tokio::time::{sleep, Duration};
 
 #[tokio::test]
 async fn test_error_paths() {
-    let mut pm = ProcessManager::new();
-    let port = pm.start_chain_simulator()
-        .expect("Failed to start simulator");
-    sleep(Duration::from_secs(3)).await;
-    let gateway_url = format!("http://localhost:{}", port);
-
-    let mut interactor = Interactor::new(&gateway_url).await.use_chain_simulator(true);
-
-    // Setup Alice (Admin/Owner)
-    let alice_private_key = generate_random_private_key();
-    let alice_wallet = Wallet::from_private_key(&alice_private_key).unwrap();
-    let alice_address = alice_wallet.to_address();
-    create_pem_file(
-        "alice_errors.pem",
-        &alice_private_key,
-        &alice_address.to_bech32("erd").to_string(),
-    );
-    interactor.register_wallet(alice_wallet.clone()).await;
-    fund_address_on_simulator(
-		&alice_address.to_bech32("erd").to_string(),
-		"100000000000000000000000",
-		&gateway_url,
-	)
-    .await;
+    let env = TestEnv::chain_only().await;
+    std::mem::forget(env.pm);
+    let mut interactor = env.interactor;
+    let alice_address = env.owner.clone();
 
     // Setup Bob (Attacker)
-    let bob_private_key = generate_random_private_key();
-    let bob_wallet = Wallet::from_private_key(&bob_private_key).unwrap();
-    let bob_address = bob_wallet.to_address();
-    interactor.register_wallet(bob_wallet.clone()).await;
-    fund_address_on_simulator(
-		&bob_address.to_bech32("erd").to_string(),
-		"100000000000000000000000",
-		&gateway_url,
-	)
-    .await;
+    let bob = interactor.register_wallet(test_wallets::bob()).await;
 
     // Deploy contract
-    let mut identity_interactor =
+    let identity_interactor =
         IdentityRegistryInteractor::init(&mut interactor, alice_address.clone()).await;
     let contract_address = identity_interactor.address().clone();
 
     // 1. Register Agent BEFORE Issue Token -> ERR_TOKEN_NOT_ISSUED
     println!("Test: Register before issue token...");
-    let err_reg = interactor
+    interactor
         .tx()
         .from(&alice_address)
         .to(&contract_address)
@@ -78,7 +45,7 @@ async fn test_error_paths() {
 
     println!("Test: Issue token twice...");
     // Attempt second issuance
-    let err_issue = interactor
+    interactor
         .tx()
         .from(&alice_address)
         .to(&contract_address)
@@ -96,7 +63,7 @@ async fn test_error_paths() {
         .register_agent(&mut interactor, "Bot1", "uri", vec![])
         .await; // Success
 
-    let err_dup = interactor
+    interactor
         .tx()
         .from(&alice_address)
         .to(&contract_address)
@@ -165,9 +132,9 @@ async fn test_error_paths() {
     println!("Test: Set metadata by non-owner...");
     // `set_metadata` checks `require_agent_owner`.
     // It is NOT payable.
-    let err_meta = interactor
+    interactor
         .tx()
-        .from(&bob_address)
+        .from(&bob)
         .to(&contract_address)
         .raw_call("set_metadata")
         .argument(&1u64) // Alice's nonce
@@ -178,6 +145,4 @@ async fn test_error_paths() {
         ))
         .run()
         .await;
-
-    std::fs::remove_file("alice_errors.pem").unwrap_or(());
 }

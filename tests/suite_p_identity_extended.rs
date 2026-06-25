@@ -1,10 +1,8 @@
-use multiversx_sc::types::{Address, CodeMetadata, ManagedBuffer};
 use multiversx_sc_snippets::imports::*;
 use mx_agentic_commerce_tests::ProcessManager;
-use tokio::time::{sleep, Duration};
-
 mod common;
 use common::{
+    wait_for_simulator_ready,
     address_to_bech32, generate_blocks_on_simulator, IdentityRegistryInteractor,
     ServiceConfigInput,
 };
@@ -26,14 +24,13 @@ async fn test_identity_extended_operations() {
     let port = pm.start_chain_simulator()
         .expect("Failed to start simulator");
     let gateway_url = format!("http://localhost:{}", port);
-    sleep(Duration::from_secs(2)).await;
+    wait_for_simulator_ready(&gateway_url).await;
 
     // Generate 25 blocks to pass epoch 1
     generate_blocks_on_simulator(25, &gateway_url).await;
 
     let mut interactor = Interactor::new(&gateway_url).await.use_chain_simulator(true);
     let wallet_alice = interactor.register_wallet(test_wallets::alice()).await;
-    let _alice_bech32 = address_to_bech32(&wallet_alice);
 
     // ── 2. Deploy Identity Registry ──
     let identity = IdentityRegistryInteractor::init(&mut interactor, wallet_alice.clone()).await;
@@ -133,7 +130,7 @@ async fn test_identity_extended_operations() {
     ];
 
     identity
-        .set_service_configs(&mut interactor, new_services, "AGENT", 1)
+        .set_service_configs(&mut interactor, new_services, 1)
         .await;
     println!("✅ set_service_configs executed for service_id=2,3");
 
@@ -164,7 +161,7 @@ async fn test_identity_extended_operations() {
 
     // ── 7. Remove metadata ──
     identity
-        .remove_metadata(&mut interactor, vec!["version"], "AGENT", 1)
+        .remove_metadata(&mut interactor, vec!["version"], 1)
         .await;
     println!("✅ remove_metadata executed for key='version'");
 
@@ -222,7 +219,7 @@ async fn test_identity_extended_operations() {
 
     // ── 8. Remove service configs ──
     identity
-        .remove_service_configs(&mut interactor, vec![1], "AGENT", 1)
+        .remove_service_configs(&mut interactor, vec![1], 1)
         .await;
     println!("✅ remove_service_configs executed for service_id=1");
 

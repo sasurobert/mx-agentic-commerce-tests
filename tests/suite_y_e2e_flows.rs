@@ -4,13 +4,14 @@ use tokio::time::{sleep, Duration};
 
 mod common;
 use common::{
-    address_to_bech32, fund_address_on_simulator, generate_blocks_on_simulator,
-    generate_random_private_key, get_simulator_chain_id,
+    wait_for_http_ok,
+    wait_for_simulator_ready,
+    address_to_bech32, create_pem_file, fund_address_on_simulator, generate_blocks_on_simulator,
+    generate_random_private_key, get_account_nonce, get_simulator_chain_id, start_facilitator,
+    start_relayer, temp_relayer_wallets_dir,
 };
 use multiversx_sc_snippets::imports::*;
 use mx_agentic_commerce_tests::ProcessManager;
-
-const FACILITATOR_PORT: u16 = 3095;
 
 /// Suite Y: Cross-Component E2E Flows
 ///
@@ -25,33 +26,28 @@ async fn test_e2e_flows() {
     let port = pm.start_chain_simulator()
         .expect("Failed to start simulator");
     let gateway_url = format!("http://localhost:{}", port);
-    sleep(Duration::from_secs(2)).await;
+    wait_for_simulator_ready(&gateway_url).await;
 
     let chain_id = get_simulator_chain_id(&gateway_url).await;
     let mut interactor = Interactor::new(&gateway_url).await.use_chain_simulator(true);
 
     // ── 2. Setup Wallets ──
-    let pem_path = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("alice.pem");
-    let alice_bech32 = "erd1qyu5wthldzr8wx5c9ucg8kjagg0jfs53s8nr3zpz3hypefsdd8ssycr6th";
-    fund_address_on_simulator(alice_bech32, "100000000000000000000000", &gateway_url).await;
-
-    let alice_wallet = Wallet::from_pem_file(pem_path.to_str().unwrap()).expect("PEM load");
-    let alice_addr = interactor.register_wallet(alice_wallet.clone()).await;
+    let alice_addr = interactor.register_wallet(test_wallets::alice()).await;
+    let alice_bech32 = address_to_bech32(&alice_addr);
+    fund_address_on_simulator(&alice_bech32, "100000000000000000000000", &gateway_url).await;
 
     // ── 3. Deploy All Registries ──
-    let (identity, validation_addr, reputation_addr) =
+    let (identity, ..) =
         common::deploy_all_registries(&mut interactor, alice_addr.clone()).await;
 
     let identity_bech32 = address_to_bech32(identity.address());
-    let validation_bech32 = address_to_bech32(&validation_addr);
-    let reputation_bech32 = address_to_bech32(&reputation_addr);
 
     generate_blocks_on_simulator(20, &gateway_url).await;
 
     // ── 4. Register Agent A (the provider) ──
     let agent_a_pk = generate_random_private_key();
     let agent_a_wallet = Wallet::from_private_key(&agent_a_pk).unwrap();
-    let agent_a_addr = interactor.register_wallet(agent_a_wallet.clone()).await;
+    let agent_a_addr = interactor.register_wallet(agent_a_wallet).await;
     let agent_a_bech32 = address_to_bech32(&agent_a_addr);
     fund_address_on_simulator(&agent_a_bech32, "10000000000000000000", &gateway_url).await;
 
@@ -80,44 +76,26 @@ async fn test_e2e_flows() {
 
     // ── 5. Start Facilitator ──
     let facilitator_pk = generate_random_private_key();
-    let fac_port_str = FACILITATOR_PORT.to_string();
     let fac_db = "./facilitator_suite_y.db";
-    let _ = std::fs::remove_file(fac_db);
 
-    pm.start_node_service(
-        "FacilitatorY",
-        "../x402_integration/x402_facilitator",
-        "dist/index.js",
-        vec![
-            ("PORT", fac_port_str.as_str()),
-            ("PRIVATE_KEY", facilitator_pk.as_str()),
-            ("REGISTRY_ADDRESS", identity_bech32.as_str()),
+    let facilitator_url = start_facilitator(
+        &mut pm,
+        &facilitator_pk,
+        &identity_bech32,
+        &gateway_url,
+        &chain_id,
+        &[
             ("IDENTITY_REGISTRY_ADDRESS", identity_bech32.as_str()),
-            ("NETWORK_PROVIDER", gateway_url.as_str()),
-            ("GATEWAY_URL", gateway_url.as_str()),
-            ("CHAIN_ID", chain_id.as_str()),
             ("SQLITE_DB_PATH", fac_db),
-            ("SKIP_SIMULATION", "false"),
+            ("SKIP_SIMULATION", "true"),
         ],
-        FACILITATOR_PORT,
     )
-    .expect("Failed to start facilitator");
+    .await;
 
-    let client = reqwest::Client::new();
-    let facilitator_url = format!("http://localhost:{}", FACILITATOR_PORT);
-
-    // Wait for facilitator
-    for _ in 0..15 {
-        if client
-            .get(format!("{}/health", facilitator_url))
-            .send()
-            .await
-            .is_ok()
-        {
-            break;
-        }
-        sleep(Duration::from_millis(500)).await;
-    }
+    let client = reqwest::Client::builder()
+        .timeout(Duration::from_secs(120))
+        .build()
+        .expect("Failed to build HTTP client");
 
     // ══════════════════════════════════════════════════
     // E2E Flow 1: Agent-to-Agent Payment via MCP
@@ -157,14 +135,15 @@ async fn test_e2e_flows() {
 
     let buyer_pk = generate_random_private_key();
     let buyer_wallet = Wallet::from_private_key(&buyer_pk).unwrap();
-    let buyer_addr = interactor.register_wallet(buyer_wallet.clone()).await;
+    let buyer_addr = interactor.register_wallet(buyer_wallet).await;
     let buyer_bech32 = address_to_bech32(&buyer_addr);
     fund_address_on_simulator(&buyer_bech32, "10000000000000000000", &gateway_url).await;
     generate_blocks_on_simulator(5, &gateway_url).await;
+    let buyer_nonce = get_account_nonce(&gateway_url, &buyer_bech32).await;
 
     let sign_output = Command::new("npx")
         .arg("ts-node")
-        .arg("../moltbot-starter-kit/scripts/sign_tx.ts")
+        .arg("scripts/sign_tx.ts")
         .arg("--sender-pk")
         .arg(&buyer_pk)
         .arg("--receiver")
@@ -172,13 +151,14 @@ async fn test_e2e_flows() {
         .arg("--value")
         .arg("1000000000000000000")
         .arg("--nonce")
-        .arg("0")
+        .arg(buyer_nonce.to_string())
         .arg("--gas-limit")
         .arg("70000")
         .arg("--gas-price")
         .arg("1000000000")
         .arg("--chain-id")
         .arg(&chain_id)
+        .current_dir("../moltbot-starter-kit")
         .output()
         .expect("Failed to sign");
 
@@ -243,6 +223,7 @@ async fn test_e2e_flows() {
         let events_json: serde_json::Value = events.json().await.unwrap();
         println!("  Events: {:?}", events_json);
         println!("  ✅ Agent-to-Agent flow: Discovery → Trust → Pay → Verify — COMPLETED");
+        generate_blocks_on_simulator(5, &gateway_url).await;
     } else {
         println!("  ⚠️ Sign failed");
     }
@@ -260,71 +241,37 @@ async fn test_e2e_flows() {
     // Create unfunded wallet
     let bot_pk = generate_random_private_key();
     let bot_wallet = Wallet::from_private_key(&bot_pk).unwrap();
-    let bot_addr = interactor.register_wallet(bot_wallet.clone()).await;
+    let bot_addr = interactor.register_wallet(bot_wallet).await;
     let bot_bech32 = address_to_bech32(&bot_addr);
     // NOTE: NOT funding this wallet — testing gasless flow
 
     // Try relayed registration (requires relayer running)
-    let relayer_port: u16 = 3096;
-    let relayer_port_str = relayer_port.to_string();
-
-    // Create temp relayer wallets dir
-    let relayer_wallets_dir = format!("{}/tmp_relayer_y", env!("CARGO_MANIFEST_DIR"));
-    let _ = std::fs::create_dir_all(&relayer_wallets_dir);
+    let relayer_wallets_dir = std::path::PathBuf::from(temp_relayer_wallets_dir("relayer_y"));
+    std::fs::create_dir_all(&relayer_wallets_dir).unwrap();
 
     // Fund 5 relayer wallets
     for i in 0..5 {
         let rk = generate_random_private_key();
         let rw = Wallet::from_private_key(&rk).unwrap();
-        let rw_addr = interactor.register_wallet(rw.clone()).await;
+        let rw_addr = interactor.register_wallet(rw).await;
         let rb = address_to_bech32(&rw_addr);
         fund_address_on_simulator(&rb, "5000000000000000000", &gateway_url).await;
 
-        let pem_content = format!(
-            "-----BEGIN PRIVATE KEY for {}-----\n{}\n-----END PRIVATE KEY for {}-----",
-            rb,
-            hex::encode(rk.as_bytes()),
-            rb
-        );
-        std::fs::write(
-            format!("{}/relayer_{}.pem", relayer_wallets_dir, i),
-            pem_content,
-        )
-        .ok();
+        let pem_path = relayer_wallets_dir.join(format!("relayer_{i}.pem"));
+        create_pem_file(pem_path.to_str().unwrap(), &rk);
     }
 
     generate_blocks_on_simulator(10, &gateway_url).await;
 
-    pm.start_node_service(
-        "RelayerY",
-        "../x402_integration/multiversx-openclaw-relayer",
-        "dist/index.js",
-        vec![
-            ("PORT", relayer_port_str.as_str()),
-            ("NETWORK_PROVIDER", gateway_url.as_str()),
-            ("IDENTITY_REGISTRY_ADDRESS", identity_bech32.as_str()),
-            ("RELAYER_WALLETS_DIR", relayer_wallets_dir.as_str()),
-            ("CHAIN_ID", chain_id.as_str()),
-            ("IS_TEST_ENV", "true"),
-            ("SKIP_SIMULATION", "false"),
-            ("LOG_LEVEL", "warn"),
-        ],
-        relayer_port,
+    let relayer_url = start_relayer(
+        &mut pm,
+        &gateway_url,
+        &identity_bech32,
+        relayer_wallets_dir.to_str().unwrap(),
+        &chain_id,
+        &[("LOG_LEVEL", "warn")],
     )
-    .expect("Failed to start relayer");
-
-    // Wait for relayer
-    for _ in 0..15 {
-        if client
-            .get(format!("http://localhost:{}/health", relayer_port))
-            .send()
-            .await
-            .is_ok()
-        {
-            break;
-        }
-        sleep(Duration::from_millis(500)).await;
-    }
+    .await;
 
     // Register unfunded bot via relayer
     let gasless_register = Command::new("npx")
@@ -334,10 +281,7 @@ async fn test_e2e_flows() {
         .env("MULTIVERSX_API_URL", &gateway_url)
         .env("IDENTITY_REGISTRY_ADDRESS", &identity_bech32)
         .env("MULTIVERSX_CHAIN_ID", &chain_id)
-        .env(
-            "MULTIVERSX_RELAYER_URL",
-            format!("http://localhost:{}", relayer_port),
-        )
+        .env("MULTIVERSX_RELAYER_URL", &relayer_url)
         .env("FORCE_RELAYER", "true")
         .env("AGENT_NAME", "GaslessBot")
         .env("AGENT_URI", "https://gasless-bot.test/manifest")
@@ -364,16 +308,34 @@ async fn test_e2e_flows() {
     // Step 2: Employer pays the gasless bot
     println!("\n📋 Step 2: Employer pays gasless bot");
 
+    // Fresh facilitator after relayer — the flow-1 instance can drop connections on CI runners.
+    let gasless_facilitator_pk = generate_random_private_key();
+    let gasless_facilitator_url = start_facilitator(
+        &mut pm,
+        &gasless_facilitator_pk,
+        &identity_bech32,
+        &gateway_url,
+        &chain_id,
+        &[
+            ("IDENTITY_REGISTRY_ADDRESS", identity_bech32.as_str()),
+            ("SQLITE_DB_PATH", "./facilitator_suite_y_gasless.db"),
+            ("SKIP_SIMULATION", "true"),
+        ],
+    )
+    .await;
+    wait_for_http_ok(&format!("{gasless_facilitator_url}/health"), 30).await;
+
     let employer_pk = generate_random_private_key();
     let employer_wallet = Wallet::from_private_key(&employer_pk).unwrap();
-    let employer_addr = interactor.register_wallet(employer_wallet.clone()).await;
+    let employer_addr = interactor.register_wallet(employer_wallet).await;
     let employer_bech32 = address_to_bech32(&employer_addr);
     fund_address_on_simulator(&employer_bech32, "10000000000000000000", &gateway_url).await;
     generate_blocks_on_simulator(5, &gateway_url).await;
+    let employer_nonce = get_account_nonce(&gateway_url, &employer_bech32).await;
 
     let pay_output = Command::new("npx")
         .arg("ts-node")
-        .arg("../moltbot-starter-kit/scripts/sign_tx.ts")
+        .arg("scripts/sign_tx.ts")
         .arg("--sender-pk")
         .arg(&employer_pk)
         .arg("--receiver")
@@ -381,13 +343,14 @@ async fn test_e2e_flows() {
         .arg("--value")
         .arg("1000000000000000000")
         .arg("--nonce")
-        .arg("0")
+        .arg(employer_nonce.to_string())
         .arg("--gas-limit")
         .arg("70000")
         .arg("--gas-price")
         .arg("1000000000")
         .arg("--chain-id")
         .arg(&chain_id)
+        .current_dir("../moltbot-starter-kit")
         .output()
         .expect("Failed sign employer tx");
 
@@ -411,20 +374,27 @@ async fn test_e2e_flows() {
         });
 
         let settle_resp = client
-            .post(format!("{}/settle", facilitator_url))
+            .post(format!("{}/settle", gasless_facilitator_url))
             .json(&json!({"scheme": "exact", "payload": payload, "requirements": requirements}))
             .send()
             .await
             .expect("Failed settle gasless");
 
-        let settle_json: serde_json::Value = settle_resp.json().await.unwrap();
+        let status = settle_resp.status();
+        let body = settle_resp.text().await.unwrap_or_default();
+        assert!(
+            status.is_success(),
+            "Gasless settle failed: status={status}, body={body}"
+        );
+
+        let settle_json: serde_json::Value =
+            serde_json::from_str(&body).expect("Failed to parse gasless settle JSON");
         println!("  Gasless settle: {:?}", settle_json);
         println!("  ✅ Gasless lifecycle: registration → payment — COMPLETED");
     }
 
     // Cleanup
-    let _ = std::fs::remove_file(fac_db);
-    let _ = std::fs::remove_dir_all(&relayer_wallets_dir);
+    std::fs::remove_dir_all(&relayer_wallets_dir).ok();
     println!("\n✅ Suite Y: E2E Flows — COMPLETED");
     println!("  Tested: Agent-to-Agent (discovery→trust→pay→verify),");
     println!("          Gasless lifecycle (register→pay)");

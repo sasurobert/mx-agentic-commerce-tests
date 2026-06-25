@@ -1,19 +1,14 @@
 use multiversx_sc::types::ManagedBuffer;
 use multiversx_sc_snippets::imports::*;
-use mx_agentic_commerce_tests::ProcessManager;
-use tokio::time::{sleep, Duration};
+use crate::common::TestEnv;
 
 
 #[tokio::test]
 async fn test_append_response() {
-    let mut pm = ProcessManager::new();
-    let port = pm.start_chain_simulator()
-        .expect("Failed to start simulator");
-    let gateway_url = format!("http://localhost:{}", port);
-    sleep(Duration::from_secs(2)).await;
-
-    let mut interactor = Interactor::new(&gateway_url).await.use_chain_simulator(true);
-    let owner = interactor.register_wallet(test_wallets::alice()).await;
+    let env = TestEnv::chain_only().await;
+    std::mem::forget(env.pm);
+    let mut interactor = env.interactor;
+    let owner = env.owner.clone();
     let employer = interactor.register_wallet(test_wallets::bob()).await;
 
     // 1. Deploy & Setup single job with feedback
@@ -24,13 +19,11 @@ async fn test_append_response() {
     identity
         .register_agent(&mut interactor, "WorkerBot", "uri", vec![])
         .await;
-    drop(identity);
 
     let job_id = "job-resp-1";
     let job_id_buf = ManagedBuffer::<StaticApi>::new_from_bytes(job_id.as_bytes());
     let agent_nonce: u64 = 1;
     let agent_nonce_buf = ManagedBuffer::<StaticApi>::new_from_bytes(&agent_nonce.to_be_bytes());
-    let employer_buf = ManagedBuffer::<StaticApi>::new_from_bytes(employer.as_bytes());
     let rating_buf = ManagedBuffer::<StaticApi>::new_from_bytes(&80u64.to_be_bytes());
     let proof = ManagedBuffer::<StaticApi>::new_from_bytes(b"proof");
 

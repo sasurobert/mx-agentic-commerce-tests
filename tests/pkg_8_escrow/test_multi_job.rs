@@ -1,51 +1,24 @@
 use crate::common::{
-    create_pem_file, fund_address_on_simulator, generate_random_private_key,
-    EscrowInteractor, EscrowStatus, IdentityRegistryInteractor, ValidationRegistryInteractor,
+    generate_random_private_key, EscrowDeposit, EscrowInteractor, EscrowStatus,
+    IdentityRegistryInteractor, TestEnv, ValidationRegistryInteractor,
 };
 use multiversx_sc_snippets::imports::*;
-use mx_agentic_commerce_tests::ProcessManager;
-use tokio::time::{sleep, Duration};
-
 
 /// S-006: Multi-job — deposit 3 jobs → release 1 → verify states independently
 #[tokio::test]
 async fn test_escrow_multi_job() {
-    let mut process_manager = ProcessManager::new();
-    let port = process_manager
-        .start_chain_simulator()
-        .expect("Failed to start simulator");
-    let gateway_url = format!("http://localhost:{}", port);
-    sleep(Duration::from_secs(3)).await;
-
-    let mut interactor = Interactor::new(&gateway_url).await.use_chain_simulator(true);
-
-    // 1. Setup
-    let owner_key = generate_random_private_key();
-    let owner_wallet = Wallet::from_private_key(&owner_key).unwrap();
-    let owner_address = owner_wallet.to_address();
+    let env = TestEnv::chain_only().await;
+    std::mem::forget(env.pm);
+    let mut interactor = env.interactor;
+    let owner_address = env.owner.clone();
 
     let worker_key = generate_random_private_key();
     let worker_wallet = Wallet::from_private_key(&worker_key).unwrap();
     let worker_address = worker_wallet.to_address();
-
-    let pem_path = "test_escrow_multi.pem";
-    create_pem_file(
-        pem_path,
-        &owner_key,
-        &owner_address.to_bech32("erd").to_string(),
-    );
-    interactor.register_wallet(owner_wallet.clone()).await;
-    interactor.register_wallet(worker_wallet.clone()).await;
-
-    fund_address_on_simulator(
-        &owner_address.to_bech32("erd").to_string(),
-        "100000000000000000000000",
-        &gateway_url,
-    )
-    .await;
+    interactor.register_wallet(worker_wallet).await;
 
     // 2. Deploy
-    let mut identity =
+    let identity =
         IdentityRegistryInteractor::init(&mut interactor, owner_address.clone()).await;
     identity
         .issue_token(&mut interactor, "AgentToken", "AGENT")
@@ -54,7 +27,7 @@ async fn test_escrow_multi_job() {
         .register_agent(&mut interactor, "MultJobWorker", "uri://multijob", vec![])
         .await;
 
-    let mut validation = ValidationRegistryInteractor::init(
+    let validation = ValidationRegistryInteractor::init(
         &mut interactor,
         owner_address.clone(),
         identity.address(),
@@ -137,16 +110,16 @@ async fn test_escrow_multi_job() {
     escrow
         .deposit_egld_expect_err(
             &mut interactor,
-            jobs[1],
-            &worker_address,
-            "poa-dup",
-            9_999_999_999u64,
-            1_000_000_000_000_000_000,
+            EscrowDeposit {
+                job_id: jobs[1],
+                receiver: &worker_address,
+                poa_hash: "poa-dup",
+                deadline: 9_999_999_999u64,
+                amount_wei: 1_000_000_000_000_000_000,
+            },
             "Escrow already exists for this job",
         )
         .await;
 
     println!("✅ S-006 PASSED: Multi-job escrow state isolation verified");
-
-    std::fs::remove_file(pem_path).unwrap_or(());
 }

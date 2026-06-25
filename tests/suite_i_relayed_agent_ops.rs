@@ -7,12 +7,11 @@ use tokio::time::{sleep, Duration};
 
 mod common;
 use common::{
-    address_to_bech32, create_pem_file, fund_address_on_simulator, generate_blocks_on_simulator,
-    generate_random_private_key, IdentityRegistryInteractor,
+    wait_for_simulator_ready,
+    address_to_bech32, create_pem_file, create_temp_pem_file, fund_address_on_simulator,
+    generate_blocks_on_simulator, generate_random_private_key, start_relayer,
+    temp_relayer_wallets_dir, IdentityRegistryInteractor,
 };
-
-const RELAYER_PORT: u16 = 3003;
-const RELAYER_URL: &str = "http://localhost:3003";
 
 /// Suite I: All agent contract operations via openclaw-relayer (Relayed V3)
 ///
@@ -29,7 +28,7 @@ async fn test_relayed_agent_operations() {
     // ────────────────────────────────────────────
     let port = pm.start_chain_simulator().unwrap(); // .expect("Failed to start Sim");
     let gateway_url = format!("http://localhost:{}", port);
-    sleep(Duration::from_secs(2)).await;
+    wait_for_simulator_ready(&gateway_url).await;
 
     let mut interactor = Interactor::new(&gateway_url).await.use_chain_simulator(true);
 
@@ -47,8 +46,7 @@ async fn test_relayed_agent_operations() {
     // 2. SETUP RELAYER WALLETS (30 to cover all shards)
     //    Fund them BEFORE creating registry (borrow rules)
     // ────────────────────────────────────────────
-    let project_root = std::env::current_dir().unwrap();
-    let relayer_wallets_dir = project_root.join("tests").join("temp_relayer_wallets_i");
+    let relayer_wallets_dir = std::path::PathBuf::from(temp_relayer_wallets_dir("relayed_i"));
 
     if relayer_wallets_dir.exists() {
         std::fs::remove_dir_all(&relayer_wallets_dir).unwrap();
@@ -60,7 +58,6 @@ async fn test_relayed_agent_operations() {
         let relayer_pk = generate_random_private_key();
         let relayer_wallet = Wallet::from_private_key(&relayer_pk).unwrap();
         let relayer_addr_obj = relayer_wallet.to_address();
-        let relayer_addr = relayer_addr_obj.to_bech32("erd").to_string();
         let relayer_sc_addr = Address::from_slice(relayer_addr_obj.as_bytes());
 
         interactor
@@ -71,8 +68,11 @@ async fn test_relayed_agent_operations() {
             .run()
             .await;
 
-        let relayer_pem = relayer_wallets_dir.join(format!("relayer_{}.pem", i));
-        create_pem_file(relayer_pem.to_str().unwrap(), &relayer_pk, &relayer_addr);
+        let relayer_pem = relayer_wallets_dir.join(format!("relayer_{i}.pem"));
+        create_pem_file(
+            relayer_pem.to_str().unwrap(),
+            &relayer_pk,
+        );
     }
     println!("All relayer wallets funded.");
 
@@ -86,7 +86,7 @@ async fn test_relayed_agent_operations() {
     // ────────────────────────────────────────────
     let registry_addr_bech32;
     {
-        let mut registry = IdentityRegistryInteractor::init(&mut interactor, admin.clone()).await;
+        let registry = IdentityRegistryInteractor::init(&mut interactor, admin.clone()).await;
         registry_addr_bech32 = address_to_bech32(registry.address());
         println!("Registry: {}", registry_addr_bech32);
 
@@ -106,35 +106,17 @@ async fn test_relayed_agent_operations() {
     generate_blocks_on_simulator(30, &gateway_url).await;
     sleep(Duration::from_millis(500)).await;
 
-    let env = vec![
-        ("NETWORK_PROVIDER", gateway_url.as_str()),
-        ("IDENTITY_REGISTRY_ADDRESS", registry_addr_bech32.as_str()),
-        ("RELAYER_WALLETS_DIR", relayer_wallets_dir.to_str().unwrap()),
-        ("PORT", "3003"),
-        ("CHAIN_ID", chain_id.as_str()),
-        ("IS_TEST_ENV", "true"),
-        ("SKIP_SIMULATION", "false"),
-        ("LOG_LEVEL", "debug"),
-    ];
-
-    pm.start_node_service(
-        "Relayer",
-        "../x402_integration/multiversx-openclaw-relayer",
-        "dist/index.js",
-        env,
-        RELAYER_PORT,
+    let relayer_url = start_relayer(
+        &mut pm,
+        &gateway_url,
+        &registry_addr_bech32,
+        relayer_wallets_dir.to_str().unwrap(),
+        &chain_id,
+        &[("LOG_LEVEL", "debug")],
     )
-    .expect("Failed to start Relayer");
-    sleep(Duration::from_secs(1)).await;
+    .await;
 
-    // Verify relayer is healthy
     let client = reqwest::Client::new();
-    let health = client
-        .get(format!("{}/health", RELAYER_URL))
-        .send()
-        .await
-        .expect("Relayer health check failed");
-    assert!(health.status().is_success(), "Relayer not healthy");
     println!("✅ Relayer is healthy");
 
     // ────────────────────────────────────────────
@@ -147,20 +129,19 @@ async fn test_relayed_agent_operations() {
     let agent_addr = agent_wallet.to_address().to_bech32("erd").to_string();
     println!("Agent Address (UNFUNDED): {}", agent_addr);
 
-    let agent_pem_path = project_root.join("tests").join("temp_agent_i.pem");
-    create_pem_file(agent_pem_path.to_str().unwrap(), &agent_pk, &agent_addr);
+    let agent_pem_path = create_temp_pem_file("agent", &agent_pk, &agent_addr);
 
     // Use register.ts script
     let output = std::process::Command::new("npm")
         .arg("run")
         .arg("register")
         .current_dir("../moltbot-starter-kit")
-        .env("MULTIVERSX_PRIVATE_KEY", agent_pem_path.to_str().unwrap())
+        .env("MULTIVERSX_PRIVATE_KEY", agent_pem_path.as_str())
         .env("MULTIVERSX_API_URL", &gateway_url)
         .env("IDENTITY_REGISTRY_ADDRESS", &registry_addr_bech32)
         .env("CHAIN_ID", &chain_id)
         .env("MULTIVERSX_CHAIN_ID", &chain_id)
-        .env("MULTIVERSX_RELAYER_URL", RELAYER_URL)
+        .env("MULTIVERSX_RELAYER_URL", &relayer_url)
         .env("FORCE_RELAYER", "true")
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
@@ -222,7 +203,7 @@ async fn test_relayed_agent_operations() {
     // returnData should have a non-empty entry (the agent's NFT nonce as base64)
     let has_agent = return_data
         .iter()
-        .any(|v| v.as_str().map_or(false, |s| !s.is_empty()));
+        .any(|v| v.as_str().is_some_and(|s| !s.is_empty()));
     assert!(
         has_agent,
         "Agent should have a non-zero ID after registration. returnData: {:?}",
@@ -238,7 +219,7 @@ async fn test_relayed_agent_operations() {
 
     // Get relayer address for this agent's shard
     let relayer_addr_res = client
-        .get(format!("{}/relayer/address/{}", RELAYER_URL, agent_addr))
+        .get(format!("{}/relayer/address/{}", relayer_url, agent_addr))
         .send()
         .await
         .expect("Failed to get relayer address");
@@ -280,7 +261,7 @@ async fn test_relayed_agent_operations() {
                 const signer = UserSigner.fromPem(pemContent);
                 const sender = new Address('{}');
 
-                const rawAbi = fs.readFileSync('identity-registry.abi.json', 'utf8')
+                const rawAbi = fs.readFileSync('src/abis/identity-registry.abi.json', 'utf8')
                     .replace(/\bTokenId\b/g, 'TokenIdentifier')
                     .replace(/\bNonZeroBigUint\b/g, 'BigUint')
                     .replace(/\bcounted-variadic\b/g, 'variadic')
@@ -327,7 +308,7 @@ async fn test_relayed_agent_operations() {
             }}
             main();
         "#,
-            agent_pem_path.to_str().unwrap(),
+            agent_pem_path.as_str(),
             agent_addr,
             chain_id,
             registry_addr_bech32,
@@ -360,7 +341,7 @@ async fn test_relayed_agent_operations() {
 
     // POST to relayer /relay
     let relay_res = client
-        .post(format!("{}/relay", RELAYER_URL))
+        .post(format!("{}/relay", relayer_url))
         .json(&json!({ "transaction": signed_tx }))
         .send()
         .await
@@ -448,7 +429,6 @@ async fn test_relayed_agent_operations() {
     // 8. CLEANUP
     // ────────────────────────────────────────────
     println!("\n═══ CLEANUP ═══");
-    let _ = std::fs::remove_dir_all(&relayer_wallets_dir);
-    let _ = std::fs::remove_file(&agent_pem_path);
+    std::fs::remove_dir_all(&relayer_wallets_dir).ok();
     println!("✅ Suite I Complete: All agent operations via Relayed V3 passed.");
 }

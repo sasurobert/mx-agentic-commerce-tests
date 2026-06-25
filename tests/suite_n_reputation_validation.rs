@@ -2,10 +2,9 @@ use multiversx_sc::types::{Address, CodeMetadata, ManagedBuffer};
 use multiversx_sc_snippets::imports::*;
 use mx_agentic_commerce_tests::ProcessManager;
 use serde_json::json;
-use tokio::time::{sleep, Duration};
-
 mod common;
-use common::{IdentityRegistryInteractor, REPUTATION_WASM_PATH, VALIDATION_WASM_PATH};
+use common::{
+    wait_for_simulator_ready,IdentityRegistryInteractor, REPUTATION_WASM_PATH, VALIDATION_WASM_PATH};
 
 /// Query a contract view via the chain simulator VM query endpoint.
 /// Returns the decoded return data as a list of base64-decoded byte arrays.
@@ -61,14 +60,13 @@ async fn test_reputation_validation_loop() {
     let port = pm.start_chain_simulator()
         .expect("Failed to start simulator");
     let gateway_url = format!("http://localhost:{}", port);
-    sleep(Duration::from_secs(2)).await;
+    wait_for_simulator_ready(&gateway_url).await;
 
     let mut interactor = Interactor::new(&gateway_url).await.use_chain_simulator(true);
     let wallet_alice = interactor.register_wallet(test_wallets::alice()).await;
-    let _alice_bech32 = common::address_to_bech32(&wallet_alice);
 
     // ── 2. Deploy Identity Registry ──
-    let mut identity =
+    let identity =
         IdentityRegistryInteractor::init(&mut interactor, wallet_alice.clone()).await;
     identity
         .issue_token(&mut interactor, "AgentToken", "AGENT")
@@ -87,9 +85,6 @@ async fn test_reputation_validation_loop() {
         )
         .await;
     println!("Agent registered: WorkerBot (nonce=1)");
-
-    // Drop identity to release the interactor borrow
-    drop(identity);
 
     // ── 3. Deploy Validation Registry ──
     println!("Deploying Validation Registry...");
@@ -140,7 +135,6 @@ async fn test_reputation_validation_loop() {
 
     // ── 5. Init Job on Validation Registry ──
     let job_id = "job-001-test";
-    let job_id_hex = hex::encode(job_id.as_bytes());
     let job_id_buf: ManagedBuffer<StaticApi> = ManagedBuffer::new_from_bytes(job_id.as_bytes());
     let agent_nonce: u64 = 1;
     let agent_nonce_buf: ManagedBuffer<StaticApi> =

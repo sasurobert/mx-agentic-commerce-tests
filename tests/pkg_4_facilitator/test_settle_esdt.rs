@@ -1,40 +1,38 @@
 use crate::common::{
-    fund_address_on_simulator, generate_blocks_on_simulator, generate_random_private_key,
-    get_simulator_chain_id, issue_fungible_esdt,
+    address_to_bech32, fund_address_on_simulator, generate_blocks_on_simulator,
+    generate_random_private_key, get_sender_shard_tx_nonce, get_simulator_chain_id,
+    issue_fungible_esdt, start_facilitator, IdentityRegistryInteractor, TestEnv,
+    wait_for_simulator_ready,
 };
-use multiversx_sc::types::Address;
 use multiversx_sc_snippets::imports::*;
-use mx_agentic_commerce_tests::ProcessManager;
 use std::process::Command;
 use tokio::time::{sleep, Duration};
 
-const FACILITATOR_PORT: u16 = 3046;
+const ESDT_DB_PATH: &str = "./facilitator_esdt.db";
 
 #[tokio::test]
 async fn test_settle_esdt() {
-    let mut pm = ProcessManager::new();
-    let sim_port = pm.start_chain_simulator().unwrap();
-    let gateway_url = format!("http://localhost:{}", sim_port);
-    sleep(Duration::from_secs(2)).await;
-
-    let mut interactor = Interactor::new(&gateway_url).await.use_chain_simulator(true);
+    let env = TestEnv::chain_only().await;
+    let mut pm = env.pm;
+    let gateway_url = env.gateway_url.clone();
+    let mut interactor = env.interactor;
 
     let sender_pk = generate_random_private_key();
     let sender_wallet = Wallet::from_private_key(&sender_pk).unwrap();
     let sender_address = sender_wallet.to_address().to_bech32("erd").to_string();
-    let sender_sc_address = interactor.register_wallet(sender_wallet).await;
 
     let receiver_pk = generate_random_private_key();
     let receiver_wallet = Wallet::from_private_key(&receiver_pk).unwrap();
     let receiver_address = receiver_wallet.to_address().to_bech32("erd").to_string();
 
-    // 1. Fund Sender (needs EGLD for issuance fees + gas)
+    // 1. Fund sender (needs EGLD for issuance fees + gas)
     println!("Funding Sender: {}", sender_address);
     fund_address_on_simulator(&sender_address, "500000000000000000000", &gateway_url).await; // 500 EGLD
 
     // Advance past epoch 0 — ESDT system SC is disabled at epoch 0
-    // RoundsPerEpoch = 20, so 25 blocks guarantees epoch >= 1
     generate_blocks_on_simulator(25, &gateway_url).await;
+
+    let sender_sc_address = interactor.register_wallet(sender_wallet).await;
 
     // 2. Issue ESDT
     let token_id = issue_fungible_esdt(
@@ -49,50 +47,31 @@ async fn test_settle_esdt() {
     .await;
     println!("Issued Token: {}", token_id);
 
+    generate_blocks_on_simulator(10, &gateway_url).await;
+    let sender_nonce =
+        get_sender_shard_tx_nonce(&interactor, &gateway_url, &sender_address, &sender_sc_address)
+            .await;
+
     // 3. Start Facilitator
     let chain_id = get_simulator_chain_id(&gateway_url).await;
     let facilitator_pk = generate_random_private_key();
-    let db_path = "./facilitator_esdt.db";
-    let _ = std::fs::remove_file(db_path);
-    let facilitator_port = FACILITATOR_PORT;
-    let port_str = facilitator_port.to_string();
-    let env_vars = vec![
-        ("PORT", port_str.as_str()),
-        ("PRIVATE_KEY", facilitator_pk.as_str()),
-        (
-            "REGISTRY_ADDRESS",
-            "erd1qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq6gq4hu",
-        ),
-        ("NETWORK_PROVIDER", gateway_url.as_str()),
-        ("GATEWAY_URL", gateway_url.as_str()),
-        ("CHAIN_ID", chain_id.as_str()),
-        ("SQLITE_DB_PATH", db_path),
-        ("SKIP_SIMULATION", "false"),
-    ];
+    let identity = IdentityRegistryInteractor::init(&mut interactor, sender_sc_address.clone()).await;
+    let registry_address = address_to_bech32(identity.address());
 
-    pm.start_node_service(
-        "Facilitator",
-        "../x402_integration/x402_facilitator",
-        "dist/index.js",
-        env_vars,
-        facilitator_port,
+    let facilitator_url = start_facilitator(
+        &mut pm,
+        &facilitator_pk,
+        &registry_address,
+        &gateway_url,
+        &chain_id,
+        &[
+            ("SQLITE_DB_PATH", ESDT_DB_PATH),
+            ("SKIP_SIMULATION", "false"),
+        ],
     )
-    .expect("Failed to start facilitator");
+    .await;
 
-    // Give it time to start
     let client = reqwest::Client::new();
-    let facilitator_url = format!("http://localhost:{}", facilitator_port);
-    for _ in 0..10 {
-        if client
-            .get(format!("{}/health", facilitator_url))
-            .send()
-            .await
-            .is_ok()
-        {
-            break;
-        }
-        sleep(Duration::from_millis(500)).await;
-    }
 
     // 4. Sign ESDT Transaction
 
@@ -101,7 +80,7 @@ async fn test_settle_esdt() {
     // Use the updated sign_tx.ts with --token and --amount
     let output = Command::new("npx")
         .arg("ts-node")
-        .arg("../moltbot-starter-kit/scripts/sign_tx.ts")
+        .arg("scripts/sign_tx.ts")
         .arg("--sender-pk")
         .arg(&sender_pk)
         .arg("--receiver")
@@ -113,13 +92,14 @@ async fn test_settle_esdt() {
         .arg("--amount")
         .arg(esdt_amount)
         .arg("--nonce")
-        .arg("1") // Nonce 1 (0 was issuance)
+        .arg(sender_nonce.to_string())
         .arg("--gas-limit")
         .arg("500000") // ESDT transfer needs more gas
         .arg("--gas-price")
         .arg("1000000000")
         .arg("--chain-id")
         .arg(&chain_id)
+        .current_dir("../moltbot-starter-kit")
         .output()
         .expect("Failed to sign transaction");
 
@@ -173,7 +153,7 @@ async fn test_settle_esdt() {
 
     // 6. Generate Blocks & Verify
     // Wait for facilitator to broadcast
-    sleep(Duration::from_secs(2)).await;
+    wait_for_simulator_ready(&gateway_url).await;
     generate_blocks_on_simulator(5, &gateway_url).await;
     sleep(Duration::from_secs(5)).await;
 

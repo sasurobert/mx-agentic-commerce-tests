@@ -5,10 +5,9 @@ use std::process::Stdio;
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 use tokio::process::ChildStdout;
 use tokio::process::Command;
-use tokio::time::{sleep, Duration};
-
 mod common;
-use common::{IdentityRegistryInteractor};
+use common::{
+    wait_for_simulator_ready,IdentityRegistryInteractor};
 
 async fn read_json_response(reader: &mut BufReader<ChildStdout>) -> String {
     let mut line = String::new();
@@ -94,7 +93,7 @@ async fn test_mcp_agent_discovery() {
     let port = pm.start_chain_simulator()
         .expect("Failed to start simulator");
     let gateway_url = format!("http://localhost:{}", port);
-    sleep(Duration::from_secs(2)).await;
+    wait_for_simulator_ready(&gateway_url).await;
 
     // ── 2. Deploy Identity Registry & Register Agents ──
     let mut interactor = Interactor::new(&gateway_url).await.use_chain_simulator(true);
@@ -114,7 +113,7 @@ async fn test_mcp_agent_discovery() {
         .await;
 
     // Deploy and register Agent #1 (Alice)
-    let mut identity =
+    let identity =
         IdentityRegistryInteractor::init(&mut interactor, wallet_alice.clone()).await;
     identity
         .issue_token(&mut interactor, "AgentToken", "AGENT")
@@ -133,9 +132,6 @@ async fn test_mcp_agent_discovery() {
         .await;
 
     let registry_addr = identity.address().clone();
-
-    // Drop identity to release the interactor borrow
-    drop(identity);
 
     // Register Agent #2 from Bob's wallet
     let name_buf: ManagedBuffer<StaticApi> = ManagedBuffer::new_from_bytes(b"BetaBot");
@@ -176,7 +172,6 @@ async fn test_mcp_agent_discovery() {
 
     println!("Registered Agent #2 (BetaBot) from Bob's wallet");
 
-    let chain_id = common::get_simulator_chain_id(&gateway_url).await;
     let registry_address = common::address_to_bech32(&registry_addr);
     println!("Registry Address: {}", registry_address);
 
@@ -204,7 +199,7 @@ async fn test_mcp_agent_discovery() {
     let query_json: Value = query_resp.json().await.unwrap();
     let return_data = &query_json["data"]["data"]["returnData"];
     assert!(
-        return_data.is_array() && return_data.as_array().unwrap().len() > 0,
+        return_data.is_array() && !return_data.as_array().unwrap().is_empty(),
         "Agent #1 should have return data"
     );
     println!("Agent #1 VM query return data: {:?}", return_data);
@@ -226,7 +221,7 @@ async fn test_mcp_agent_discovery() {
     let query_json2: Value = query_resp2.json().await.unwrap();
     let return_data2 = &query_json2["data"]["data"]["returnData"];
     assert!(
-        return_data2.is_array() && return_data2.as_array().unwrap().len() > 0,
+        return_data2.is_array() && !return_data2.as_array().unwrap().is_empty(),
         "Agent #2 should have return data"
     );
     println!("Agent #2 VM query return data: {:?}", return_data2);

@@ -6,115 +6,20 @@ use multiversx_sc::proxy_imports::*;
 use multiversx_sc::types::{Address, CodeMetadata, EgldOrEsdtTokenIdentifier, ManagedBuffer};
 use multiversx_sc_snippets::imports::*;
 
-pub mod interactors;
-pub use interactors::*;
-
 pub mod escrow_interactor;
+pub mod mpp_session_helpers;
+pub mod mpp_session_mvx_proxy;
+pub mod services;
+pub mod simulator;
+pub mod test_env;
 pub use escrow_interactor::*;
+pub use services::*;
+pub use simulator::*;
+pub use test_env::TestEnv;
 
 pub const WASM_PATH: &str = "artifacts/identity-registry.wasm";
 pub const VALIDATION_WASM_PATH: &str = "artifacts/validation-registry.wasm";
 pub const REPUTATION_WASM_PATH: &str = "artifacts/reputation-registry.wasm";
-
-pub async fn get_simulator_chain_id(gateway_url: &str) -> String {
-    let client = reqwest::Client::new();
-    let resp: serde_json::Value = client
-        .get(format!("{}/network/config", gateway_url))
-        .send()
-        .await
-        .expect("Failed to get network config")
-        .json()
-        .await
-        .expect("Failed to parse network config");
-
-    resp["data"]["config"]["erd_chain_id"]
-        .as_str()
-        .expect("Chain ID not found")
-        .to_string()
-}
-
-/// Fund an address on the chain simulator using /simulator/set-state.
-/// This bypasses the initial wallet balance limits (typically ~10 EGLD).
-/// `balance_wei` should be the full balance in wei (e.g. "100000000000000000000000" for 100,000 EGLD).
-
-pub async fn fund_address_on_simulator(address_bech32: &str, balance_wei: &str, gateway_url: &str) {
-    let client = reqwest::Client::new();
-    let body = serde_json::json!([{
-        "address": address_bech32,
-        "balance": balance_wei,
-        "nonce": 0
-    }]);
-
-    for _ in 0..5 {
-        let res = client
-            .post(format!("{}/simulator/set-state", gateway_url))
-            .json(&body)
-            .send()
-            .await;
-
-        match res {
-            Ok(resp) => {
-                if resp.status().is_success() {
-                    return;
-                }
-                println!(
-                    "fund_address failed with status {}, retrying...",
-                    resp.status()
-                );
-            }
-            Err(e) => {
-                println!("fund_address request failed: {}, retrying...", e);
-            }
-        }
-        tokio::time::sleep(tokio::time::Duration::from_millis(1000)).await;
-    }
-    panic!("Failed to set state on simulator after retries");
-}
-
-/// Generate blocks on the chain simulator (needed when broadcasting
-/// via external services like relayer/facilitator, since `interactor.tx().run()`
-/// auto-generates blocks but HTTP broadcasts don't).
-pub async fn generate_blocks_on_simulator(num_blocks: u32, gateway_url: &str) {
-    let client = reqwest::Client::new();
-    let res = client
-        .post(format!(
-            "{}/simulator/generate-blocks/{}",
-            gateway_url, num_blocks
-        ))
-        .send()
-        .await
-        .expect("Failed to generate blocks on simulator");
-    assert!(res.status().is_success(), "generate-blocks failed");
-}
-
-/// Force-set the block timestamp on all shards of the chain simulator.
-/// This avoids generating thousands of blocks just to advance time.
-/// `timestamp_seconds` is the Unix timestamp in seconds.
-pub async fn force_set_block_timestamp(gateway_url: &str, timestamp_seconds: u64) {
-    let client = reqwest::Client::new();
-    // Set on all shards (0, 1, 2) and metachain (4294967295)
-    for shard in &[0u32, 1, 2, 4294967295] {
-        let body = serde_json::json!({
-            "timestamp": timestamp_seconds,
-        });
-        let res = client
-            .post(format!(
-                "{}/simulator/set-current-block-info?shard={}",
-                gateway_url, shard
-            ))
-            .json(&body)
-            .send()
-            .await
-            .expect("Failed to set block timestamp on simulator");
-        assert!(
-            res.status().is_success(),
-            "set-current-block-info failed for shard {}",
-            shard
-        );
-    }
-    // Generate 1 block to commit the new timestamp
-    generate_blocks_on_simulator(1, gateway_url).await;
-}
 
 use rand::RngCore;
 
@@ -147,7 +52,18 @@ pub async fn vm_query<T: TopDecode>(
     query.original_result().returns(ReturnsResult).run().await
 }
 
-pub fn create_pem_file(file_path: &str, private_key_hex: &str, _address_bech32: &str) {
+/// Write a PEM file under the system temp directory (avoids polluting the repo root).
+pub fn create_temp_pem_file(label: &str, private_key_hex: &str, address_bech32: &str) -> String {
+    let path = std::env::temp_dir().join(format!(
+        "mx-agentic-{label}-{}-{address_bech32}.pem",
+        std::process::id()
+    ));
+    let path_str = path.to_string_lossy().into_owned();
+    create_pem_file(&path_str, private_key_hex);
+    path_str
+}
+
+pub fn create_pem_file(file_path: &str, private_key_hex: &str) {
     let priv_bytes = hex::decode(private_key_hex).expect("Invalid hex");
     let wallet = Wallet::from_private_key(private_key_hex).expect("Wallet failed");
     let address = wallet.to_address(); // multiversx_chain_core::types::Address
@@ -255,7 +171,7 @@ impl IdentityRegistryInteractor {
             .run()
             .await;
 
-        let _ = interactor.generate_blocks(3).await;
+        interactor.generate_blocks(3).await.ok();
         println!("Issued Token: {}", ticker);
     }
 
@@ -381,9 +297,9 @@ impl IdentityRegistryInteractor {
         uri: &str,
         metadata: Vec<(&str, Vec<u8>)>,
         services: Vec<ServiceConfigInput<StaticApi>>,
-        token_identifier: &str,
-        nonce: u64,
+        agent_token: (&str, u64),
     ) {
+        let (token_identifier, nonce) = agent_token;
         let name_buf: ManagedBuffer<StaticApi> = ManagedBuffer::new_from_bytes(name.as_bytes());
         let uri_buf: ManagedBuffer<StaticApi> = ManagedBuffer::new_from_bytes(uri.as_bytes());
         let pk_buf: ManagedBuffer<StaticApi> = ManagedBuffer::new_from_bytes(&[0u8; 32]);
@@ -448,7 +364,6 @@ impl IdentityRegistryInteractor {
         &self,
         interactor: &mut Interactor,
         metadata: Vec<(&str, Vec<u8>)>,
-        _token_identifier: &str,
         nonce: u64,
     ) {
         let metadata_count = metadata.len() as u32;
@@ -488,7 +403,6 @@ impl IdentityRegistryInteractor {
         &self,
         interactor: &mut Interactor,
         keys: Vec<&str>,
-        _token_identifier: &str,
         nonce: u64,
     ) {
         let mut request = interactor
@@ -511,7 +425,6 @@ impl IdentityRegistryInteractor {
         &self,
         interactor: &mut Interactor,
         services: Vec<ServiceConfigInput<StaticApi>>,
-        _token_identifier: &str,
         nonce: u64,
     ) {
         let mut request = interactor
@@ -545,7 +458,6 @@ impl IdentityRegistryInteractor {
         &self,
         interactor: &mut Interactor,
         service_ids: Vec<u32>,
-        _token_identifier: &str,
         nonce: u64,
     ) {
         let mut request = interactor
@@ -910,7 +822,7 @@ pub async fn issue_fungible_esdt_custom(
         .await;
 
     println!("Issued ESDT {}...", ticker);
-    interactor.generate_blocks(15).await;
+    interactor.generate_blocks(15).await.ok();
 
     // Fetch token ID via HTTP API
     let issuer_bech32 = address_to_bech32(issuer);
@@ -923,7 +835,7 @@ pub async fn issue_fungible_esdt_custom(
         if let Ok(r) = resp {
             if let Ok(json) = r.json::<serde_json::Value>().await {
                 if let Some(tokens) = json["data"]["esdts"].as_object() {
-                    for (key, _val) in tokens {
+                    for key in tokens.keys() {
                         if key.starts_with(ticker) {
                             println!("Found Token: {}", key);
                             return key.clone();
@@ -932,7 +844,7 @@ pub async fn issue_fungible_esdt_custom(
                 }
             }
         }
-        interactor.generate_blocks(1).await;
+        interactor.generate_blocks(1).await.ok();
         tokio::time::sleep(std::time::Duration::from_secs(1)).await;
     }
 

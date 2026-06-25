@@ -1,9 +1,9 @@
 use multiversx_sc::types::ManagedBuffer;
 use multiversx_sc_snippets::imports::*;
-use mx_agentic_commerce_tests::ProcessManager;
-use tokio::time::{sleep, Duration};
 
-use crate::common::{deploy_all_registries, vm_query, EscrowInteractor, EscrowStatus};
+use crate::common::{TestEnv, 
+    deploy_all_registries, vm_query, EscrowInteractor, EscrowStatus,
+};
 
 /// T-003: Agent-to-Agent Cascading Escrow
 /// A hires B (escrow-ab), B sub-hires C (escrow-bc)
@@ -12,13 +12,9 @@ use crate::common::{deploy_all_registries, vm_query, EscrowInteractor, EscrowSta
 /// Both get feedback, all states verified
 #[tokio::test]
 async fn test_cascading_escrow_chain() {
-    let mut pm = ProcessManager::new();
-    let port = pm.start_chain_simulator()
-        .expect("Failed to start simulator");
-    let gateway_url = format!("http://localhost:{}", port);
-    sleep(Duration::from_secs(2)).await;
-
-    let mut interactor = Interactor::new(&gateway_url).await.use_chain_simulator(true);
+    let env = TestEnv::chain_only().await;
+    std::mem::forget(env.pm);
+    let mut interactor = env.interactor;
 
     let alice = interactor.register_wallet(test_wallets::alice()).await;
     let bob = interactor.register_wallet(test_wallets::bob()).await;
@@ -40,7 +36,6 @@ async fn test_cascading_escrow_chain() {
     identity
         .register_agent(&mut interactor, "AlphaAgent", "https://alpha.ai", vec![])
         .await;
-    let _agent_a_nonce: u64 = 1;
 
     let name_b = ManagedBuffer::<StaticApi>::new_from_bytes(b"BetaAgent");
     let uri_b = ManagedBuffer::<StaticApi>::new_from_bytes(b"https://beta.ai");

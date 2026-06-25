@@ -7,7 +7,8 @@ use tokio::time::{sleep, Duration};
 
 mod common;
 use common::{
-    address_to_bech32, create_pem_file, generate_blocks_on_simulator, generate_random_private_key,
+    wait_for_simulator_ready,
+    address_to_bech32, create_temp_pem_file, generate_blocks_on_simulator, generate_random_private_key,
     IdentityRegistryInteractor,
 };
 
@@ -28,7 +29,7 @@ async fn test_moltbot_update_manifest() {
     let port = pm.start_chain_simulator()
         .expect("Failed to start simulator");
     let gateway_url = format!("http://localhost:{}", port);
-    sleep(Duration::from_secs(2)).await;
+    wait_for_simulator_ready(&gateway_url).await;
 
     let mut interactor = Interactor::new(&gateway_url).await.use_chain_simulator(true);
     let alice = interactor.register_wallet(test_wallets::alice()).await;
@@ -37,7 +38,7 @@ async fn test_moltbot_update_manifest() {
     println!("Simulator ChainID: {}", chain_id);
 
     // 2. Deploy Identity Registry + Issue Token
-    let mut registry = IdentityRegistryInteractor::init(&mut interactor, alice.clone()).await;
+    let registry = IdentityRegistryInteractor::init(&mut interactor, alice.clone()).await;
     let registry_address = address_to_bech32(registry.address());
     println!("Registry Address: {}", registry_address);
 
@@ -50,7 +51,7 @@ async fn test_moltbot_update_manifest() {
     // 3. Setup Moltbot Wallet (FUNDED)
     let moltbot_pk = generate_random_private_key();
     let moltbot_wallet_obj = Wallet::from_private_key(&moltbot_pk).unwrap();
-    let moltbot_address = interactor.register_wallet(moltbot_wallet_obj.clone()).await;
+    let moltbot_address = interactor.register_wallet(moltbot_wallet_obj).await;
     let moltbot_address_bech32 = address_to_bech32(&moltbot_address);
 
     println!("Funding Moltbot: {}", moltbot_address_bech32);
@@ -64,20 +65,8 @@ async fn test_moltbot_update_manifest() {
 
     generate_blocks_on_simulator(10, &gateway_url).await;
 
-    // Create PEM
+    let pem_path = create_temp_pem_file("moltbot_update", &moltbot_pk, &moltbot_address_bech32);
     let project_root = std::env::current_dir().unwrap();
-    let temp_dir = project_root.join("tests").join("temp_suite_e2");
-    if temp_dir.exists() {
-        std::fs::remove_dir_all(&temp_dir).unwrap();
-    }
-    std::fs::create_dir_all(&temp_dir).unwrap();
-
-    let pem_path = temp_dir.join("moltbot.pem");
-    create_pem_file(
-        pem_path.to_str().unwrap(),
-        &moltbot_pk,
-        &moltbot_address_bech32,
-    );
 
     // 4. Run Registration Script (Direct)
     println!("\n═══ Step 1: Moltbot Registration (Direct TX) ═══");
@@ -85,7 +74,7 @@ async fn test_moltbot_update_manifest() {
         .arg("run")
         .arg("register")
         .current_dir("../moltbot-starter-kit")
-        .env("MULTIVERSX_PRIVATE_KEY", pem_path.to_str().unwrap())
+        .env("MULTIVERSX_PRIVATE_KEY", pem_path.as_str())
         .env("MULTIVERSX_API_URL", &gateway_url)
         .env("IDENTITY_REGISTRY_ADDRESS", &registry_address)
         .env("MULTIVERSX_CHAIN_ID", &chain_id)
@@ -142,7 +131,7 @@ async fn test_moltbot_update_manifest() {
         .expect("returnData not found");
     let has_agent = return_data
         .iter()
-        .any(|v| v.as_str().map_or(false, |s| !s.is_empty()));
+        .any(|v| v.as_str().is_some_and(|s| !s.is_empty()));
     assert!(
         has_agent,
         "Agent should be registered. returnData: {:?}",
@@ -191,7 +180,7 @@ async fn test_moltbot_update_manifest() {
         .arg("run")
         .arg("update-manifest")
         .current_dir("../moltbot-starter-kit")
-        .env("MULTIVERSX_PRIVATE_KEY", pem_path.to_str().unwrap())
+        .env("MULTIVERSX_PRIVATE_KEY", pem_path.as_str())
         .env("MULTIVERSX_API_URL", &gateway_url)
         .env("IDENTITY_REGISTRY_ADDRESS", &registry_address)
         .env("MULTIVERSX_CHAIN_ID", &chain_id)
@@ -248,7 +237,6 @@ async fn test_moltbot_update_manifest() {
     println!("✅ get_agent: Agent data found after update");
 
     // 9. Cleanup
-    let _ = std::fs::remove_dir_all(&temp_dir);
-    let _ = std::fs::remove_file(&config_path); // cleanup agent.config.json
+    std::fs::remove_file(&config_path).ok(); // cleanup agent.config.json
     println!("✅ Suite E2 Complete: Moltbot direct registration + update manifest PASSED.");
 }

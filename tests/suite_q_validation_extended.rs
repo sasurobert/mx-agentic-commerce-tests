@@ -1,12 +1,9 @@
-use multiversx_sc::types::{Address, CodeMetadata, ManagedBuffer};
 use multiversx_sc_snippets::imports::*;
 use mx_agentic_commerce_tests::ProcessManager;
-use tokio::time::{sleep, Duration};
-
 mod common;
 use common::{
-    address_to_bech32, deploy_all_registries, generate_blocks_on_simulator,
-    IdentityRegistryInteractor, ServiceConfigInput, ValidationRegistryInteractor,
+    wait_for_simulator_ready,
+    address_to_bech32, deploy_all_registries, generate_blocks_on_simulator, ServiceConfigInput, ValidationRegistryInteractor,
 };
 
 /// Suite Q: Validation Registry Extended Tests
@@ -25,17 +22,16 @@ async fn test_validation_extended_operations() {
     let port = pm.start_chain_simulator()
         .expect("Failed to start simulator");
     let gateway_url = format!("http://localhost:{}", port);
-    sleep(Duration::from_secs(2)).await;
+    wait_for_simulator_ready(&gateway_url).await;
 
     // Generate 25 blocks to pass epoch 1
     generate_blocks_on_simulator(25, &gateway_url).await;
 
     let mut interactor = Interactor::new(&gateway_url).await.use_chain_simulator(true);
     let wallet_alice = interactor.register_wallet(test_wallets::alice()).await;
-    let alice_bech32 = address_to_bech32(&wallet_alice);
 
     // ── 2. Deploy all 3 registries ──
-    let (identity, validation_addr, _reputation_addr) =
+    let (identity, validation_addr, ..) =
         deploy_all_registries(&mut interactor, wallet_alice.clone()).await;
 
     let identity_bech32 = address_to_bech32(identity.address());
@@ -61,9 +57,6 @@ async fn test_validation_extended_operations() {
         )
         .await;
     println!("Agent registered: PricedBot (nonce=1)");
-
-    // Drop identity to release borrow
-    drop(identity);
 
     // ── 4. Create ValidationRegistryInteractor ──
     // We need to use raw calls since we already deployed

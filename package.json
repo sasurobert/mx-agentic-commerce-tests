@@ -7,7 +7,9 @@
     "test": "tests"
   },
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "vitest run",
+    "test:unit": "vitest run tests/mpp-402.test.ts",
+    "test:chain": "RUN_CHAIN_TESTS=1 vitest run tests/mpp-payment.test.ts"
   },
   "repository": {
     "type": "git",
@@ -17,6 +19,9 @@
   "author": "",
   "license": "ISC",
   "type": "module",
+  "engines": {
+    "node": ">=24"
+  },
   "bugs": {
     "url": "https://github.com/sasurobert/mx-agentic-commerce-tests/issues"
   },

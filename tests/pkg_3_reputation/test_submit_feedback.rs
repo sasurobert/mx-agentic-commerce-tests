@@ -1,24 +1,19 @@
 use multiversx_sc::types::{BigUint, ManagedBuffer};
 use multiversx_sc_snippets::imports::*;
-use mx_agentic_commerce_tests::ProcessManager;
-use tokio::time::{sleep, Duration};
 
-use crate::common::{vm_query};
+use crate::common::{TestEnv, vm_query};
 
 #[tokio::test]
 async fn test_submit_feedback() {
-    let mut pm = ProcessManager::new();
-    let port = pm.start_chain_simulator()
-        .expect("Failed to start simulator");
-    let gateway_url = format!("http://localhost:{}", port);
-    sleep(Duration::from_secs(2)).await;
+    let env = TestEnv::chain_only().await;
+    std::mem::forget(env.pm);
+    let mut interactor = env.interactor;
+    let owner = env.owner.clone();
 
-    let mut interactor = Interactor::new(&gateway_url).await.use_chain_simulator(true);
-    let owner = interactor.register_wallet(test_wallets::alice()).await;
     let employer = interactor.register_wallet(test_wallets::bob()).await;
 
     // 1. Deploy All Registries
-    let (mut identity, validation_addr, reputation_addr) =
+    let (identity, validation_addr, reputation_addr) =
         crate::common::deploy_all_registries(&mut interactor, owner.clone()).await;
 
     // Register Agent (Nonce 1)
@@ -30,7 +25,6 @@ async fn test_submit_feedback() {
             vec![],
         )
         .await;
-    drop(identity);
 
     // 2. Init Job, Submit Proof, Verify Job
     let job_id = "job-feedback-1";

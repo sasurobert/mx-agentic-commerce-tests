@@ -5,10 +5,9 @@ use std::process::Stdio;
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 use tokio::process::ChildStdout;
 use tokio::process::Command;
-use tokio::time::{sleep, Duration};
-
 mod common;
-use common::{IdentityRegistryInteractor};
+use common::{
+    wait_for_simulator_ready,IdentityRegistryInteractor};
 
 async fn read_json_response(reader: &mut BufReader<ChildStdout>) -> String {
     let mut line = String::new();
@@ -87,7 +86,7 @@ async fn test_agent_to_agent_discovery() {
     let port = pm.start_chain_simulator()
         .expect("Failed to start simulator");
     let gateway_url = format!("http://localhost:{}", port);
-    sleep(Duration::from_secs(2)).await;
+    wait_for_simulator_ready(&gateway_url).await;
 
     let chain_id = common::get_simulator_chain_id(&gateway_url).await;
     println!("Simulator ChainID: {}", chain_id);
@@ -98,7 +97,7 @@ async fn test_agent_to_agent_discovery() {
     let wallet_bob = interactor.register_wallet(test_wallets::bob()).await;
 
     // ── 3. Deploy Identity Registry & Register Agents ──
-    let mut identity =
+    let identity =
         IdentityRegistryInteractor::init(&mut interactor, wallet_alice.clone()).await;
     identity
         .issue_token(&mut interactor, "AgentToken", "AGENT")
@@ -122,8 +121,6 @@ async fn test_agent_to_agent_discovery() {
     println!("Agent A (MoltBot) registered as nonce=1");
 
     let registry_addr = identity.address().clone();
-    // Drop identity to release the interactor borrow
-    drop(identity);
 
     // Register Agent B (ServiceBot) from Bob's wallet — nonce=2
     // Must use a different wallet since contract enforces 1 agent per address

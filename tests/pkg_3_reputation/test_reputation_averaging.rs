@@ -1,27 +1,19 @@
 use multiversx_sc::types::{BigUint, ManagedBuffer};
 use multiversx_sc_snippets::imports::*;
-use mx_agentic_commerce_tests::ProcessManager;
-use tokio::time::{sleep, Duration};
 
-use crate::common::{vm_query};
+use crate::common::{deploy_all_registries, vm_query, TestEnv};
 
 #[tokio::test]
 async fn test_reputation_averaging() {
-    let mut pm = ProcessManager::new();
-    let port = pm.start_chain_simulator()
-        .expect("Failed to start simulator");
-    let gateway_url = format!("http://localhost:{}", port);
-    sleep(Duration::from_secs(2)).await;
-
-    let mut interactor = Interactor::new(&gateway_url).await.use_chain_simulator(true);
-    let owner = interactor.register_wallet(test_wallets::alice()).await;
+    let env = TestEnv::chain_only().await;
+    std::mem::forget(env.pm);
+    let mut interactor = env.interactor;
+    let owner = env.owner.clone();
     let employer = interactor.register_wallet(test_wallets::bob()).await;
 
-    // 1. Deploy All Registries
-    let (mut identity, validation_addr, reputation_addr) =
-        crate::common::deploy_all_registries(&mut interactor, owner.clone()).await;
+    let (identity, validation_addr, reputation_addr) =
+        deploy_all_registries(&mut interactor, owner.clone()).await;
 
-    // Register Agent (Nonce 1)
     identity
         .register_agent(
             &mut interactor,
@@ -30,13 +22,8 @@ async fn test_reputation_averaging() {
             vec![],
         )
         .await;
-    drop(identity);
 
-    // 2. Complete 3 Jobs
-    // Ratings: 80, 90, 60
-    // Avg = floor((80 + 90 + 60) / 3) = 76
-
-    let ratings = vec![80u64, 90u64, 60u64];
+    let ratings = [80u64, 90u64, 60u64];
     let agent_nonce: u64 = 1;
 
     for (i, rating) in ratings.iter().enumerate() {
@@ -44,7 +31,6 @@ async fn test_reputation_averaging() {
         let job_id_buf = ManagedBuffer::<StaticApi>::new_from_bytes(job_id.as_bytes());
         let zero_proof = ManagedBuffer::<StaticApi>::new_from_bytes(b"proof");
 
-        // Init
         interactor
             .tx()
             .from(&employer)
@@ -55,7 +41,6 @@ async fn test_reputation_averaging() {
             .argument(&agent_nonce)
             .run()
             .await;
-        // Proof
         interactor
             .tx()
             .from(&owner)
@@ -66,7 +51,6 @@ async fn test_reputation_averaging() {
             .argument(&zero_proof)
             .run()
             .await;
-        // Submit
         interactor
             .tx()
             .from(&employer)
@@ -80,7 +64,6 @@ async fn test_reputation_averaging() {
             .await;
     }
 
-    // 3. Verify Average Reputation Score
     let nonce_mb = ManagedBuffer::<StaticApi>::new_from_bytes(&agent_nonce.to_be_bytes());
     let score: BigUint<StaticApi> = vm_query(
         &mut interactor,
@@ -91,12 +74,8 @@ async fn test_reputation_averaging() {
     .await;
 
     let score_val = score.to_u64().unwrap_or(0);
-    println!("Final Reputation Score: {}", score_val);
-
-    // Expected: (80 + 90 + 60) / 3 = 230 / 3 = 76.66 -> 76 (integer division)
     assert_eq!(score_val, 76, "Average score mismatch");
 
-    // 4. Verify Total Jobs count
     let total_jobs: u64 = vm_query(
         &mut interactor,
         &reputation_addr,
@@ -109,30 +88,24 @@ async fn test_reputation_averaging() {
 
 #[tokio::test]
 async fn test_max_rating() {
-    let mut pm = ProcessManager::new();
-    let port = pm.start_chain_simulator()
-        .expect("Failed to start simulator");
-    let gateway_url = format!("http://localhost:{}", port);
-    sleep(Duration::from_secs(2)).await;
-
-    let mut interactor = Interactor::new(&gateway_url).await.use_chain_simulator(true);
-    let owner = interactor.register_wallet(test_wallets::alice()).await;
+    let env = TestEnv::chain_only().await;
+    std::mem::forget(env.pm);
+    let mut interactor = env.interactor;
+    let owner = env.owner.clone();
     let employer = interactor.register_wallet(test_wallets::bob()).await;
 
-    let (mut identity, validation_addr, reputation_addr) =
-        crate::common::deploy_all_registries(&mut interactor, owner.clone()).await;
+    let (identity, validation_addr, reputation_addr) =
+        deploy_all_registries(&mut interactor, owner.clone()).await;
 
     identity
         .register_agent(&mut interactor, "MaxBot", "uri", vec![])
         .await;
-    drop(identity);
 
     let agent_nonce: u64 = 1;
     let job_id = "job-max";
     let job_id_buf = ManagedBuffer::<StaticApi>::new_from_bytes(job_id.as_bytes());
     let proof_buf = ManagedBuffer::<StaticApi>::new_from_bytes(b"proof");
 
-    // Complete job lifecycle
     interactor
         .tx()
         .from(&employer)
@@ -153,8 +126,6 @@ async fn test_max_rating() {
         .argument(&proof_buf)
         .run()
         .await;
-
-    // Submit max rating: 100
     interactor
         .tx()
         .from(&employer)
@@ -167,7 +138,6 @@ async fn test_max_rating() {
         .run()
         .await;
 
-    // Verify score = 100
     let nonce_mb = ManagedBuffer::<StaticApi>::new_from_bytes(&agent_nonce.to_be_bytes());
     let score: BigUint<StaticApi> = vm_query(
         &mut interactor,
@@ -185,30 +155,21 @@ async fn test_max_rating() {
 
 #[tokio::test]
 async fn test_min_rating() {
-    let mut pm = ProcessManager::new();
-    let port = pm.start_chain_simulator()
-        .expect("Failed to start simulator");
-    let gateway_url = format!("http://localhost:{}", port);
-    sleep(Duration::from_secs(2)).await;
-
-    let mut interactor = Interactor::new(&gateway_url).await.use_chain_simulator(true);
-    let owner = interactor.register_wallet(test_wallets::alice()).await;
+    let env = TestEnv::chain_only().await;
+    std::mem::forget(env.pm);
+    let mut interactor = env.interactor;
+    let owner = env.owner.clone();
     let employer = interactor.register_wallet(test_wallets::bob()).await;
 
-    let (mut identity, validation_addr, reputation_addr) =
-        crate::common::deploy_all_registries(&mut interactor, owner.clone()).await;
+    let (identity, validation_addr, reputation_addr) =
+        deploy_all_registries(&mut interactor, owner.clone()).await;
 
     identity
         .register_agent(&mut interactor, "MinBot", "uri", vec![])
         .await;
-    drop(identity);
 
     let agent_nonce: u64 = 1;
-
-    // Two jobs: first rating = 0, second rating = 100
-    // Expected: after job-1 (rating=0): score = 0
-    //           after job-2 (rating=100): score = (0*1 + 100) / 2 = 50
-    let ratings_and_jobs = vec![(0u64, "job-min-0"), (100u64, "job-min-1")];
+    let ratings_and_jobs = [(0u64, "job-min-0"), (100u64, "job-min-1")];
 
     for (rating, job_id) in &ratings_and_jobs {
         let job_id_buf = ManagedBuffer::<StaticApi>::new_from_bytes(job_id.as_bytes());
@@ -247,7 +208,6 @@ async fn test_min_rating() {
             .await;
     }
 
-    // Verify score after 0 then 100 = average(0, 100) = 50
     let nonce_mb = ManagedBuffer::<StaticApi>::new_from_bytes(&agent_nonce.to_be_bytes());
     let score: BigUint<StaticApi> = vm_query(
         &mut interactor,

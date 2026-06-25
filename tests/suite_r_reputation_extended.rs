@@ -1,12 +1,10 @@
-use multiversx_sc::types::{Address, CodeMetadata, ManagedBuffer};
+use multiversx_sc::types::ManagedBuffer;
 use multiversx_sc_snippets::imports::*;
 use mx_agentic_commerce_tests::ProcessManager;
-use tokio::time::{sleep, Duration};
-
 mod common;
 use common::{
-    address_to_bech32, deploy_all_registries, generate_blocks_on_simulator,
-    IdentityRegistryInteractor, ValidationRegistryInteractor,
+    wait_for_simulator_ready,
+    address_to_bech32, deploy_all_registries, generate_blocks_on_simulator, ValidationRegistryInteractor,
 };
 
 /// Suite R: Reputation Registry Extended Tests
@@ -25,7 +23,7 @@ async fn test_reputation_extended_operations() {
     let port = pm.start_chain_simulator()
         .expect("Failed to start simulator");
     let gateway_url = format!("http://localhost:{}", port);
-    sleep(Duration::from_secs(2)).await;
+    wait_for_simulator_ready(&gateway_url).await;
 
     // Generate 25 blocks to pass epoch 1
     generate_blocks_on_simulator(25, &gateway_url).await;
@@ -53,9 +51,6 @@ async fn test_reputation_extended_operations() {
         .await;
     println!("Agent registered: ReputedBot (nonce=1)");
 
-    // Drop identity to release borrow
-    drop(identity);
-
     let validation = ValidationRegistryInteractor {
         wallet_address: wallet_alice.clone(),
         contract_address: validation_addr.clone(),
@@ -64,7 +59,7 @@ async fn test_reputation_extended_operations() {
     let client = reqwest::Client::new();
 
     // ── 4. Create 3 jobs, verify, and submit feedback with different ratings ──
-    let jobs = vec![
+    let jobs = [
         ("job-r-001", "proof-r-001", 80u64),  // rating 80
         ("job-r-002", "proof-r-002", 60u64),  // rating 60
         ("job-r-003", "proof-r-003", 100u64), // rating 100
